@@ -1,0 +1,34 @@
+﻿using System.Collections.Generic;
+using System.Linq;
+using Relay.Utils;
+
+namespace Relay.Clients
+{
+    public class ClientManager
+    {
+        public static readonly List<Client> Clients = new ();
+
+        public static Client Get(IRemote remote) => Clients.FirstOrDefault(client => client.Remote.Equals(remote));
+        public static Client Get(ushort id) => Clients.FirstOrDefault(client => client.Id == id);
+
+        public static Client Add(Client client)
+        {
+            Clients.Add(client);
+            return client;
+        }
+
+        public static Client Remove(Client client)
+        {
+            Clients.Remove(client);
+            return client;
+        }
+
+        public static ushort NextId()
+        {
+            ushort id = 0;
+            while (Clients.Any(client => client.Id == id))
+                id++;
+            return id;
+        }
+    }
+}
