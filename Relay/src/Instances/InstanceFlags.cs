@@ -19,5 +19,6 @@ public enum InstanceFlags: uint
     AllowProps = 1024,
     VanishBlocked = 2048,
     GhostBlocked = 4096,
-    GroupModeration = 8192
+    GroupModeration = 8192,
+    AllowOverload = 16384
 }

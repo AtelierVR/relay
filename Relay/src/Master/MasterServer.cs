@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Relay.Clients;
 using Relay.Instances;
@@ -55,11 +57,10 @@ namespace Relay.Master
                     internal_id = instance.InternalId,
                     master_id = instance.MasterId,
                     flags = (uint)instance.Flags,
-                    players = Array.Empty<byte>(),
+                    players = [],
                     max_players = instance.Capacity
                 }).ToArray()
             };
-
             var response = await Request<ResponseUpdate, RequestUpdate>("/api/relays/update", HttpMethod.Post, request);
 
             if (response.HasError())
@@ -102,9 +103,9 @@ namespace Relay.Master
                     instance.Password = instanceRaw.password;
                     instance.World = new World
                     {
-                        MasterId = instanceRaw.WorldId,
-                        Address = instanceRaw.ServerAddress,
-                        Version = instanceRaw.Version
+                        MasterId = instanceRaw.WorldId(),
+                        Address = instanceRaw.WorldServer() ?? response.data.server,
+                        Version = instanceRaw.Version()
                     };
                 }
 
@@ -126,20 +127,21 @@ namespace Relay.Master
                 var request = new HttpRequestMessage(method, $"{ServerGateway}{path}");
                 if (data != null)
                 {
-                    var str = JObject.FromObject(data).ToString();
+                    var str = JsonConvert.SerializeObject(data);
                     var content = new StringContent(str);
                     content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                     request.Content = content;
                 }
-
                 var response = await client.SendAsync(request);
                 var responseString = await response.Content.ReadAsStringAsync();
                 return JObject.Parse(responseString).ToObject<MasterResponse<T>>();
             }
             catch (Exception e)
             {
-                return new MasterResponse<T>
-                    { error = new MasterResponseError { message = e.Message, code = ushort.MaxValue, status = 500 } };
+                return new MasterResponse<T>()
+                {
+                    error = new MasterResponseError() { message = e.Message, code = 1, status = 500 }
+                };
             }
         }
     }

@@ -50,6 +50,7 @@ public class AuthHandler : Handler
         var lastStatus = client.Status;
         var bearer = new AuthBearerRequest { access_token = accessToken, user_id = userId };
         client.Status = ClientStatus.Authentificating;
+        Logger.Debug($"{client} authentificating with {bearer.access_token} as {bearer.user_id}");
         var response = await MasterServer.Request<AuthBearerResponse, AuthBearerRequest>(
             "/api/relays/checkbearer",
             HttpMethod.Post, bearer
@@ -86,16 +87,19 @@ public class AuthHandler : Handler
                 buffer.Write(response.data.blacklisted.id);
                 buffer.Write((DateTimeOffset.Now - response.data.blacklisted.ExprireAt).TotalMinutes);
                 client.Status = lastStatus;
+                Logger.Debug($"{client} authentification error blacklisted {response.data.blacklisted.id}");
             }
             else if (response.data.is_invalid_token)
             {
                 buffer.Write(AuthResult.InvalidToken);
                 client.Status = lastStatus;
+                Logger.Debug($"{client} authentification error invalid token");
             }
             else
             {
                 buffer.Write(AuthResult.Unknown);
                 client.Status = lastStatus;
+                Logger.Debug($"{client} authentification error unknown");
             }
 
             Request.SendBuffer(client, buffer, ResponseType.Authentification, uid);

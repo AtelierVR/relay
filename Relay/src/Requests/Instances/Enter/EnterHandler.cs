@@ -41,7 +41,7 @@ public class EnterHandler : Handler
             return;
         }
 
-        if (instance.Capacity <= instance.Players.Count)
+        if (instance.Capacity <= instance.Players.Count && !instance.Flags.HasFlag(InstanceFlags.AllowOverload) || instance.Players.Count >= ushort.MaxValue)
         {
             response.Write(EnterResult.Full);
             Request.SendBuffer(client, response, ResponseType.Enter, uid);

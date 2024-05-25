@@ -34,7 +34,7 @@ namespace Relay
                 }
                 catch (Exception e)
                 {
-                    // Logger.Error($"Error on connection: {e}");
+                    Logger.Error($"Error on connection: {e}");
                 }
         }
     }

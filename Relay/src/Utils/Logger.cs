@@ -5,7 +5,8 @@ namespace Relay;
 public class Logger
 {
     public const string Format = "{0} [{1}] {2}";
-    public const bool PrintDebug = false;
+    // get environment variable
+    public static bool PrintDebug = true;
     
     public static string LastDate => DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
 
