@@ -53,5 +53,6 @@ namespace Relay.Utils
 
         public string GetToken() => Has("token") ? Get<string>("token") : "";
         public byte GetMaxInstances() => Has("max_instances") ? Get<byte>("max_instances") : Constants.MaxInstances;
+        public string GetUseAddress() => Has("use_address") ? Get<string>("use_address") : Constants.UseAddress;
     }
 }

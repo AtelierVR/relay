@@ -42,6 +42,8 @@ namespace Relay.Master
         {
             var request = new RequestUpdate()
             {
+                port = Config.Load().GetPort(),
+                use_address = Config.Load().GetUseAddress(),
                 max_instances = _maxInstances,
                 clients = ClientManager.Clients.ToArray().Select(client => new RequestClient
                 {

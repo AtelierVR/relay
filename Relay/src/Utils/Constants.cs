@@ -5,6 +5,7 @@
         public const ushort ProtocolVersion = 1;
         public const ushort MaxPacketSize = 1024;
         public const ushort Port = 23032;
+        public const string UseAddress = "127.0.0.1:23032";
         public const string MasterGateway = "http://127.0.0.1:53032";
         public const ushort ConnectionTimeout = 15;
         public const byte MaxInstances = 3;

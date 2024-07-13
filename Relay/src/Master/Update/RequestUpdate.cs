@@ -3,6 +3,8 @@
 public class RequestUpdate
 {
     public byte max_instances { get; set; }
+    public ushort port { get; set; }
+    public string use_address { get; set; }
     public RequestClient[] clients { get; set; }
     public RequestInstance[] instances { get; set; }
 
