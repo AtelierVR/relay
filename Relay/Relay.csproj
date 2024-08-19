@@ -118,8 +118,7 @@
         <Compile Include="src\Requests\Auth\AuthHandler.cs" />
         <Compile Include="src\Requests\Auth\AuthResponse.cs" />
         <Compile Include="src\Requests\Auth\AuthResult.cs" />
-        <Compile Include="src\Requests\Auth\Bearer\AuthBearerRequest.cs" />
-        <Compile Include="src\Requests\Auth\Bearer\AuthBearerResponse.cs" />
+        <Compile Include="src\Requests\Auth\AuthRequest.cs" />
         <Compile Include="src\Requests\Disconnect\DisconnectHandler.cs" />
         <Compile Include="src\Requests\Handshake\HandshakeHandler.cs" />
         <Compile Include="src\Requests\Instances\Config\ConfigHandler.cs" />

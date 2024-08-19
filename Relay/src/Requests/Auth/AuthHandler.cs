@@ -3,7 +3,6 @@ using System.Net.Http;
 using System.Threading;
 using Relay.Clients;
 using Relay.Master;
-using Relay.Requests.Auth.Bearer;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;
 
@@ -32,26 +31,29 @@ public class AuthHandler : Handler
         }
 
         var accessToken = buffer.ReadString();
-        if (flags.HasFlag(AuthFlags.UseIntegrity))
-        {
-            var response = new Buffer();
-            response.Write(AuthResult.Unknown);
-            Request.SendBuffer(client, response, ResponseType.Authentification, uid);
-        }
-        else
-        {
-            var thread = new Thread(() => WorkerBearerAuth(client, uid, userId, accessToken));
-            thread.Start();
-        }
+        var thread = new Thread(() => WorkerAuth(
+            client, 
+            uid, 
+            userId, 
+            accessToken, 
+            flags.HasFlag(AuthFlags.UseIntegrity) ? "integrity" : "bearer")
+        );
+        thread.Start();
     }
 
-    public static async void WorkerBearerAuth(Client client, ushort uid, uint userId, string accessToken)
+    public static async void WorkerAuth(Client client, ushort uid, uint userId, string accessToken, string type)
     {
         var lastStatus = client.Status;
-        var bearer = new AuthBearerRequest { access_token = accessToken, user_id = userId };
+        var bearer = new AuthRequest
+        {
+            access_token = accessToken,
+            user_id = userId,
+            token_type = type,
+            ip = client.Remote.Address.ToString()
+        };
         client.Status = ClientStatus.Authentificating;
         Logger.Debug($"{client} authentificating with {bearer.access_token} as {bearer.user_id}");
-        var response = await MasterServer.Request<AuthBearerResponse, AuthBearerRequest>(
+        var response = await MasterServer.Request<AuthResponse, AuthRequest>(
             "/api/relays/checkbearer",
             HttpMethod.Post, bearer
         );
