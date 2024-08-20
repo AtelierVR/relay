@@ -1,7 +1,4 @@
-﻿using System;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading;
+﻿using System.Threading;
 using Relay.Master;
 using Relay.Requests;
 using Relay.Utils;
@@ -17,9 +14,11 @@ namespace Relay
 
         public static void Main(string[] args)
         {
+            Logger.Log("Starting NoxRelay...");
+            // Starting the server
+            _netRecv = new Request();
             _udpRecv = new UdpRecv();
             _tcpRecv = new TCPRecv();
-            _netRecv = new Request();
             _master = new MasterServer();
 
             Handler.Listing();

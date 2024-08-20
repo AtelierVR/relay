@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "dotnet build && cd .\\Relay\\bin\\Debug\\ && .\\Relay.exe"
+    "dev": "dotnet build && cd .\\NoxRelay\\bin\\Debug\\net8.0 && .\\NoxRelay.exe"
   },
   "keywords": [],
   "author": "",

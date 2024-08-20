@@ -1,9 +1,4 @@
-﻿using System;
-using System.Diagnostics;
-using System.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Relay.Clients;
 using Relay.Instances;
@@ -24,7 +19,6 @@ namespace Relay.Master
         {
             var config = Config.Load();
             ServerGateway = config.GetMasterGateway();
-            // set hostname to the server address
             ServerAddress = ServerGateway
                 .Replace("http://", "").Replace("https://", "")
                 .Split('/')[0];

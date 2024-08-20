@@ -1,7 +1,7 @@
-﻿using System.Linq;
-using Relay.Clients;
+﻿using Relay.Clients;
 using Relay.Players;
 using Relay.Utils;
+using Buffer = Relay.Utils.Buffer;
 
 namespace Relay.Requests.Instances.Quit;
 
@@ -20,10 +20,10 @@ public class QuitHandler : Handler
         var player = PlayerManager.GetFromClientInstance(client.Id, instanceId);
         if (player is not { Status: > PlayerStatus.None }) return;
         var action = buffer.ReadEnum<QuitType>();
-        LeavePlayer(player, action, buffer.ReadString(), player);
+        LeavePlayer(player, action, buffer.ReadString() ?? "", player);
     }
 
-    public void LeavePlayer(Player player, QuitType type, string reason = null, Player by = null)
+    public void LeavePlayer(Player player, QuitType type, string? reason = null, Player? by = null)
     {
         if (player.Status == PlayerStatus.None) return;
         if (type == QuitType.ModerationKick && (by?.Modered is null || !by.Modered.IsModerator)) return;
@@ -48,7 +48,8 @@ public class QuitHandler : Handler
         response = new Buffer();
         response.Write(player.InstanceId);
         response.Write(type);
-        response.Write(string.IsNullOrEmpty(reason) ? null : reason);
+        if (reason is not null)
+            response.Write(reason);
         Request.SendBuffer(player.Client, response, ResponseType.Quit);
 
         // leave event

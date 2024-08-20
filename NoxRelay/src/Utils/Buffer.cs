@@ -1,5 +1,4 @@
-﻿using System;
-using System.Numerics;
+﻿using System.Numerics;
 
 namespace Relay.Utils
 {
@@ -12,6 +11,7 @@ namespace Relay.Utils
         public Buffer(ushort offset = 0)
         {
             Clear();
+            data = new byte[offset];
             this.offset = offset;
             length = offset;
         }
@@ -162,7 +162,7 @@ namespace Relay.Utils
             return value;
         }
 
-        public string ReadString()
+        public string? ReadString()
         {
             var length = ReadUShort();
             if (offset + length > this.length) return null;
@@ -240,7 +240,7 @@ namespace Relay.Utils
             return new Quaternion(x, y, z, w);
         }
 
-        public byte[] ReadBytes(ushort length)
+        public byte[]? ReadBytes(ushort length)
         {
             if (offset + length > this.length) return null;
             var value = new byte[length];
@@ -276,11 +276,15 @@ namespace Relay.Utils
             return true;
         }
 
-        public T Read<T>()
+        public T? Read<T>()
         {
             if (typeof(T) == typeof(byte)) return (T)(object)ReadByte();
             if (typeof(T) == typeof(ushort)) return (T)(object)ReadUShort();
-            if (typeof(T) == typeof(string)) return (T)(object)ReadString();
+            if (typeof(T) == typeof(string))
+            {
+                var value = ReadString();
+                return value != null ? (T)(object)value : default;
+            }
             if (typeof(T) == typeof(DateTime)) return (T)(object)ReadDateTime();
             if (typeof(T) == typeof(int)) return (T)(object)ReadInt();
             if (typeof(T) == typeof(long)) return (T)(object)ReadLong();
@@ -288,13 +292,17 @@ namespace Relay.Utils
             if (typeof(T) == typeof(double)) return (T)(object)ReadDouble();
             if (typeof(T) == typeof(Vector3)) return (T)(object)ReadVector3();
             if (typeof(T) == typeof(Quaternion)) return (T)(object)ReadQuaternion();
-            if (typeof(T) == typeof(byte[])) return (T)(object)ReadBytes(ReadUShort());
+            if (typeof(T) == typeof(byte[]))
+            {
+                var value = ReadBytes(ReadUShort());
+                return value != null ? (T)(object)value : default;
+            }
             if (typeof(T) == typeof(uint)) return (T)(object)ReadUInt();
             if (typeof(T) == typeof(Buffer)) return (T)(object)Clone();
             return default;
         }
 
-        public T ReadEnum<T>() where T : Enum
+        public T? ReadEnum<T>() where T : Enum
         {
             var type = Enum.GetUnderlyingType(typeof(T));
             if (type == typeof(byte)) return (T)(object)ReadByte();

@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using Relay.Players;
+﻿using Relay.Players;
 using Relay.Requests.Disconnect;
 using Relay.Requests.Instances.Quit;
 using Relay.Utils;

@@ -1,6 +1,7 @@
 ﻿using Relay.Clients;
 using Relay.Requests.Disconnect;
 using Relay.Utils;
+using Buffer = Relay.Utils.Buffer;
 
 namespace Relay.Requests.Handshake;
 

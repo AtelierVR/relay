@@ -1,5 +1,6 @@
 ﻿using Relay.Clients;
 using Relay.Utils;
+using Buffer = Relay.Utils.Buffer;
 
 namespace Relay.Requests.Disconnect;
 
@@ -14,7 +15,7 @@ public class DisconnectHandler : Handler
         var type = buffer.ReadEnum<RequestType>();
         if (type != RequestType.Disconnect) return;
         var reason = buffer.ReadString();
-        SendEvent(client, reason);
+        SendEvent(client, reason ?? "");
     }
 
     public void SendEvent(Client client, string reason)

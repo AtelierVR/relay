@@ -1,6 +1,7 @@
 ﻿using Relay.Clients;
 using Relay.Players;
 using Relay.Utils;
+using Buffer = Relay.Utils.Buffer;
 
 namespace Relay.Requests.Instances.Config;
 

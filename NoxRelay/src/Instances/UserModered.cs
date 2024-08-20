@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Relay.Instances;
+﻿namespace Relay.Instances;
 
 public class UserModered
 {
