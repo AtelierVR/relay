@@ -11,7 +11,7 @@ namespace Relay.Utils
         public Buffer(ushort offset = 0)
         {
             Clear();
-            data = new byte[offset];
+            data = new byte[1024];
             this.offset = offset;
             length = offset;
         }
@@ -143,8 +143,16 @@ namespace Relay.Utils
 
         public override string ToString()
         {
-            var res = "Buffer[(offset=" + offset + ", length=" + length + ") ";
-            for (var i = 0; i < length; i++) res += (i == 0 ? "" : " ") + data[i].ToString("X2");
+            var res = $"Buffer[(offset={offset.ToString("X")}, length={length.ToString("X")}) ";
+            try
+            {
+
+                for (var i = 0; i < length; i++) res += (i == 0 ? "" : " ") + data[i].ToString("X2");
+            }
+            catch (Exception e)
+            {
+                Logger.Error(e.ToString());
+            }
             return res + "]";
         }
 
