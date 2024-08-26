@@ -14,6 +14,7 @@ namespace Relay.Master
         private static string _token = "";
         private static byte _maxInstances;
         public static bool IsConnected { get; private set; } = false;
+        public static string MasterAddress = "";
 
         public async void Start()
         {
@@ -68,6 +69,7 @@ namespace Relay.Master
                 }
 
                 IsConnected = false;
+                MasterAddress = "";
             }
             else
             {
@@ -78,6 +80,7 @@ namespace Relay.Master
                 }
 
                 IsConnected = true;
+                MasterAddress = response.data.server;
 
                 foreach (var instanceRaw in response.data.instances)
                 {

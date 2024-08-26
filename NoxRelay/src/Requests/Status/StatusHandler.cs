@@ -20,9 +20,7 @@ public class StatusHandler : Handler
         var pagnation = buffer.ReadByte();
         var response = new Buffer();
         response.Write((byte)0x00);
-        response.Write(MasterServer.ServerAddress);
-        // response.Write(page);
-        // response.Write(MaxPages);
+        response.Write(MasterServer.MasterAddress);
         var pages = GetPages((ushort)(Constants.MaxPacketSize - response.length - 2));
         Logger.Debug($"{client} requested page {pagnation} of {pages.Length}");
         if (pagnation >= pages.Length)
