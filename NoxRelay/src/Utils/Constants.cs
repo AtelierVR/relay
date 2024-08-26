@@ -9,6 +9,7 @@
         public const string MasterGateway = "http://127.0.0.1:53032";
         public const ushort ConnectionTimeout = 15;
         public const byte MaxInstances = 3;
+        public const bool PrintDebug = true;
     }
 
     public enum RequestType : byte
