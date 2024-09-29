@@ -108,7 +108,11 @@ namespace Relay.Master
                     };
                 }
 
-                foreach (var instance in InstanceManager.Instances.Where(instance => response.data.instances.All(i => i.master_id != instance.MasterId)))
+				var instances = InstanceManager.Instances
+                	.Where(instance => response.data.instances.All(i => i.master_id != instance.MasterId))
+                    .ToArray();
+                    
+                foreach (var instance in instances)
                 {
                     Logger.Log($"{instance} removed");
                     InstanceManager.Remove(instance);
