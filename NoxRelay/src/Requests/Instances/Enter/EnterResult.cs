@@ -10,5 +10,6 @@ public enum EnterResult : byte
     InvalidGame = 5,
     IncorrectPassword = 6,
     Unknown = 7,
-    Refused = 8
+    Refused = 8,
+    InvalidPseudonyme = 9
 }

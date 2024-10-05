@@ -6,4 +6,5 @@ public enum EnterFlags: byte
     AsBot = 1,
     UsePseudonyme = 2,
     UsePassword = 4,
+    HideInList = 8
 }

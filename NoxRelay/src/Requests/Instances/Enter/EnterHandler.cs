@@ -66,7 +66,7 @@ public class EnterHandler : Handler
         }
 
         var pFlags = PlayerFlags.None;
-        string display = null;
+        string? display = null;
 
         var flags = buffer.ReadEnum<EnterFlags>();
         if (flags.HasFlag(EnterFlags.AsBot))
@@ -82,8 +82,19 @@ public class EnterHandler : Handler
             pFlags |= PlayerFlags.IsBot;
         }
 
+        if (flags.HasFlag(EnterFlags.HideInList))
+            pFlags |= PlayerFlags.HideInList;
+
         if (flags.HasFlag(EnterFlags.UsePseudonyme))
+        {
             display = buffer.ReadString();
+            if (string.IsNullOrWhiteSpace(display) || display.Length < 3 || display.Length > 32)
+            {
+                response.Write(EnterResult.InvalidPseudonyme);
+                Request.SendBuffer(client, response, ResponseType.Enter, uid);
+                return;
+            }
+        }
 
         if (instance.Flags.HasFlag(InstanceFlags.UsePassword)
             && (!flags.HasFlag(EnterFlags.UsePassword) || !instance.VerifyPassword(buffer.ReadString())))
