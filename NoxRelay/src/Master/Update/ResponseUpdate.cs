@@ -28,4 +28,6 @@ public class ResponseInstance
         world_ref.Split('@').Length == 2 ?
             (string.IsNullOrEmpty(world_ref.Split('@')[1]) || world_ref.Split('@')[1] != "::" ? null : world_ref.Split('@')[1])
             : null;
+
+    public override string ToString() => $"{GetType().Name}[master_id={master_id}, capacity={capacity}, flags={flags}, password={password}, world_ref={world_ref}]";
 }

@@ -10,6 +10,8 @@ public class MasterResponse<T>
     public MasterResponseError error { get; set; }
     public DateTime GetTime() => new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds(time);
     public bool HasError() => error is { status: > 0 };
+
+    public override string ToString() => $"{GetType().Name}[{(HasError() ? $"error={error}" : $"data={data}, time={GetTime()}, request={request}")}]";
 }
 
 public class MasterResponseError

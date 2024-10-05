@@ -4,6 +4,7 @@ using Relay.Clients;
 using Relay.Instances;
 using Relay.Master.Update;
 using Relay.Utils;
+using System.Diagnostics;
 
 namespace Relay.Master
 {
@@ -28,45 +29,62 @@ namespace Relay.Master
 
             while (true)
             {
-                SendUpdate();
+                await SendUpdate();
                 await Task.Delay(5000);
             }
         }
 
-        public async void SendUpdate()
+        public async Task SendUpdate()
         {
+            Logger.Debug("Sending update to the master server");
+            var clients = ClientManager.Clients.ToArray().Select(client => new RequestClient
+            {
+                id = client.Id,
+                remote = client.Remote.Address + ":" + client.Remote.Port,
+                status = client.Status.ToString().ToLower(),
+                platform = client.Platform.ToString().ToLower(),
+                engine = client.Engine.ToString().ToLower(),
+                last_seen = (ulong)client.LastSeen.ToUnixTimeMilliseconds(),
+                user = client.User == null ? null : new RequestUser
+                {
+                    id = client.User.Id,
+                    address = client.User.Address
+                }
+            }).ToArray();
+
+
+            var instances = InstanceManager.Instances.ToArray().Select(instance => new RequestInstance
+            {
+                internal_id = instance.InternalId,
+                master_id = instance.MasterId,
+                flags = (uint)instance.Flags,
+                players = instance.Players.ToArray().Select(player => new RequestPlayer
+                {
+                    id = player.Id,
+                    client_id = player.Client.Id,
+                    display = player.Display,
+                    flags = (uint)player.Flags,
+                    status = (byte)player.Status
+                }).ToArray(),
+                max_players = instance.Capacity
+            }).ToArray();
+
             var request = new RequestUpdate()
             {
                 port = Config.Load().GetPort(),
                 use_address = Config.Load().GetUseAddress(),
                 max_instances = _maxInstances,
-                clients = ClientManager.Clients.ToArray().Select(client => new RequestClient
-                {
-                    id = client.Id,
-                    remote = client.Remote.Address + ":" + client.Remote.Port,
-                    status = client.Status.ToString().ToLower(),
-                    platform = client.Platform.ToString().ToLower(),
-                    engine = client.Engine.ToString().ToLower(),
-                    last_seen = (ulong)client.LastSeen.ToUnixTimeMilliseconds()
-                }).ToArray(),
-                instances = InstanceManager.Instances.ToArray().Select(instance => new RequestInstance
-                {
-                    internal_id = instance.InternalId,
-                    master_id = instance.MasterId,
-                    flags = (uint)instance.Flags,
-                    players = [],
-                    max_players = instance.Capacity
-                }).ToArray()
+                clients = clients,
+                instances = instances
             };
+
             var response = await Request<ResponseUpdate, RequestUpdate>("/api/relays/update", HttpMethod.Post, request);
 
             if (response.HasError())
             {
                 if (IsConnected)
-                {
                     Logger.Warning("Disconnected from the master server");
-                    Logger.Debug($"Error: {response.error.message}");
-                }
+                Logger.Debug($"Update Master ({ServerGateway}) error: {response.error.message}");
 
                 IsConnected = false;
                 MasterAddress = "";
@@ -108,12 +126,18 @@ namespace Relay.Master
                     };
                 }
 
-                foreach (var instance in InstanceManager.Instances.Where(instance => response.data.instances.All(i => i.master_id != instance.MasterId)))
+                var instancesToRemove = InstanceManager.Instances
+                    .Where(instance => response.data.instances.All(i => i.master_id != instance.MasterId))
+                    .ToArray();
+
+                foreach (var instance in instancesToRemove)
                 {
                     Logger.Log($"{instance} removed");
                     InstanceManager.Remove(instance);
                 }
             }
+
+            return;
         }
 
         public static async Task<MasterResponse<T>> Request<T, TR>(string path, HttpMethod method, TR data = default)
@@ -123,6 +147,7 @@ namespace Relay.Master
                 var client = new HttpClient();
                 client.DefaultRequestHeaders.Authorization =
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Badger", _token);
+                client.Timeout = TimeSpan.FromSeconds(2);
                 var request = new HttpRequestMessage(method, $"{ServerGateway}{path}");
                 if (data != null)
                 {
