@@ -52,7 +52,6 @@ namespace Relay.Master
                 }
             }).ToArray();
 
-
             var instances = InstanceManager.Instances.ToArray().Select(instance => new RequestInstance
             {
                 internal_id = instance.InternalId,
