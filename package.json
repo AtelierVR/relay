@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "dotnet build && cd .\\NoxRelay\\bin\\Debug\\net8.0 && .\\NoxRelay.exe"
+    "dev": "dotnet build && cd .\\NoxRelay\\bin\\Debug\\net8.0 && .\\NoxRelay.exe",
+    "compose": "docker build . -t noxrelay -t hactazia/noxrelay"
   },
   "keywords": [],
   "author": "",

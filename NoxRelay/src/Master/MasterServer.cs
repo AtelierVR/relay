@@ -36,7 +36,6 @@ namespace Relay.Master
 
         public async Task SendUpdate()
         {
-            Logger.Debug("Sending update to the master server");
             var clients = ClientManager.Clients.ToArray().Select(client => new RequestClient
             {
                 id = client.Id,
@@ -82,8 +81,10 @@ namespace Relay.Master
             if (response.HasError())
             {
                 if (IsConnected)
+                {
                     Logger.Warning("Disconnected from the master server");
-                Logger.Debug($"Update Master ({ServerGateway}) error: {response.error.message}");
+                    Logger.Debug($"Update Master ({ServerGateway}) error: {response.error.message}");
+                }
 
                 IsConnected = false;
                 MasterAddress = "";
