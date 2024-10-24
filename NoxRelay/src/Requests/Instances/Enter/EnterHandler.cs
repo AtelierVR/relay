@@ -97,7 +97,7 @@ public class EnterHandler : Handler
         }
 
         if (instance.Flags.HasFlag(InstanceFlags.UsePassword)
-            && (!flags.HasFlag(EnterFlags.UsePassword) || !instance.VerifyPassword(buffer.ReadString())))
+            && (!flags.HasFlag(EnterFlags.UsePassword) || !instance.VerifyPassword(buffer.ReadString() ?? "")))
         {
             response.Write(EnterResult.IncorrectPassword);
             Request.SendBuffer(client, response, ResponseType.Enter, uid);
@@ -121,5 +121,19 @@ public class EnterHandler : Handler
         response.Write(player.Instance.MaxTps);
         Logger.Log($"{player} entered {instance}");
         Request.SendBuffer(client, response, ResponseType.Enter, uid);
+    }
+
+    public static void SendJoin(Client client, Player player, ushort uid = ushort.MinValue)
+    {
+        var response = new Buffer();
+        response.Write(player.InstanceId);
+        response.Write(player.Flags);
+        response.Write(player.Id);
+        response.Write(player.Client.User?.Id ?? uint.MinValue);
+        response.Write(player.Display);
+        response.Write(player.CreatedAt);
+        response.Write(player.Client.Engine);
+        response.Write(player.Client.Platform);
+        Request.SendBuffer(client, response, ResponseType.Join, uid);
     }
 }

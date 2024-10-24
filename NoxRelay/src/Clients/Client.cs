@@ -14,7 +14,7 @@ namespace Relay.Clients
         public Platfrom Platform = Platfrom.None;
         public Engine Engine = Engine.None;
         public DateTimeOffset LastSeen = DateTimeOffset.MinValue;
-        public User User = null;
+        public User? User = null;
 
         public List<Player> Players => PlayerManager.GetFromClient(Id);
 

@@ -1,5 +1,8 @@
-﻿using Relay.Clients;
+﻿using Newtonsoft.Json.Linq;
+using Relay.Clients;
 using Relay.Players;
+using Relay.Requests.Instances.Enter;
+using Relay.Requests.Instances.Transform;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;
 
@@ -43,6 +46,11 @@ public class ConfigHandler : Handler
         var players = PlayerManager.GetFromInstance(player.InstanceId);
         foreach (var other in players.Where(other => other != player))
         {
+            if (other is not { Status: PlayerStatus.Ready }) continue;
+            EnterHandler.SendJoin(other.Client, player);
+            EnterHandler.SendJoin(player.Client, other);
+            foreach (var transform in other.Transforms.GetPairs())
+                TransformHandler.SendTransform(player.Client, player.InstanceId, other.Id, transform.Key, transform.Value);
         }
         Logger.Log($"{player} is ready");
     }
