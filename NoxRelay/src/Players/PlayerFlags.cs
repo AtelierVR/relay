@@ -15,5 +15,8 @@ public enum PlayerFlags : uint
     WorldOwner = 64,
     WorldModerator = 128,
     AuthUnverified = 256,
-    HideInList = 512
+    HideInList = 512,
+
+    IsOwner = InstanceOwner | WorldOwner,
+    IsModerator = InstanceModerator | GuildModerator | MasterModerator | WorldModerator,
 }

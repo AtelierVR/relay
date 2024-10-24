@@ -40,6 +40,10 @@ public class ConfigHandler : Handler
     private static void ReadyHandler(Buffer buffer, Player player, ushort uid)
     {
         player.Status = PlayerStatus.Ready;
+        var players = PlayerManager.GetFromInstance(player.InstanceId);
+        foreach (var other in players.Where(other => other != player))
+        {
+        }
         Logger.Log($"{player} is ready");
     }
 

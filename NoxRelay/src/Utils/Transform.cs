@@ -4,6 +4,8 @@ namespace Relay.Utils
 {
     public class Transform
     {
+        public TransformFlags flags;
+
         public Vector3 position;
         public Quaternion rotation;
         public Vector3 scale;

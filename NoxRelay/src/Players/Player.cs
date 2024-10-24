@@ -13,8 +13,14 @@ public class Player
     private string _display;
     public DateTimeOffset CreatedAt = DateTimeOffset.Now;
     public PlayerFlags Flags = PlayerFlags.None;
-    
+
+    public PlayerTransform Transforms = new();
+
     public UserModered Modered => Instance.GetModered(Client.User);
+    public bool IsModerator 
+        => Flags.HasFlag(PlayerFlags.IsModerator) 
+        || Flags.HasFlag(PlayerFlags.IsOwner)
+        || Modered.IsModerator;
 
     public string Display
     {
