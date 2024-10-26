@@ -36,6 +36,7 @@ public class RequestPlayer
     public string display { get; set; }
     public uint flags { get; set; }
     public byte status { get; set; }
+    public ulong created_at { get; set; }
 }
 
 public class RequestInstance

@@ -16,6 +16,11 @@ namespace Relay.Master
         private static byte _maxInstances;
         public static bool IsConnected { get; private set; } = false;
         public static string MasterAddress = "";
+        public static DateTime LastUpdate = DateTime.Now;
+        public static ushort NextUpdateTime = Constants.DefaultUpdateTime;
+
+        public static void UpdateImediately() => LastUpdate = DateTime.MinValue;
+
 
         public async void Start()
         {
@@ -27,10 +32,19 @@ namespace Relay.Master
             _token = config.GetToken();
             _maxInstances = config.GetMaxInstances();
 
+
+
             while (true)
             {
+                if (IsConnected && DateTime.Now - LastUpdate < TimeSpan.FromMilliseconds(NextUpdateTime))
+                {
+                    await Task.Delay(Constants.MinUpdateTime);
+                    continue;
+                }
+                else if (!IsConnected)
+                    await Task.Delay(NextUpdateTime);
+                LastUpdate = DateTime.Now;
                 await SendUpdate();
-                await Task.Delay(5000);
             }
         }
 
@@ -62,7 +76,8 @@ namespace Relay.Master
                     client_id = player.Client.Id,
                     display = player.Display,
                     flags = (uint)player.Flags,
-                    status = (byte)player.Status
+                    status = (byte)player.Status,
+                    created_at = (ulong)player.CreatedAt.ToUnixTimeMilliseconds()
                 }).ToArray(),
                 max_players = instance.Capacity
             }).ToArray();
@@ -81,10 +96,8 @@ namespace Relay.Master
             if (response.HasError())
             {
                 if (IsConnected)
-                {
                     Logger.Warning("Disconnected from the master server");
-                    Logger.Debug($"Update Master ({ServerGateway}) error: {response.error.message}");
-                }
+                Logger.Debug($"Update Master ({ServerGateway}) error: {response.error.message}");
 
                 IsConnected = false;
                 MasterAddress = "";
@@ -96,6 +109,10 @@ namespace Relay.Master
                     Logger.Log("Connected to the master server");
                     Logger.Debug($"Server address: {ServerGateway}");
                 }
+
+                NextUpdateTime = response.data.next_update;
+                if (NextUpdateTime < Constants.MinUpdateTime)
+                    NextUpdateTime = Constants.MinUpdateTime;
 
                 IsConnected = true;
                 MasterAddress = response.data.server;

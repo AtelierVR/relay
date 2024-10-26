@@ -15,6 +15,9 @@ namespace Relay
         public static void Main(string[] args)
         {
             Logger.Log("Starting NoxRelay...");
+            if (Logger.PrintDebug)
+                Logger.Warning("Debug mode enabled");
+
             // Starting the server
             _netRecv = new Request();
             _udpRecv = new UdpRecv();

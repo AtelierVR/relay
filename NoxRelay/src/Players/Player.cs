@@ -31,7 +31,6 @@ public class Player
     public Player()
     {
         Id = PlayerManager.GetNextId(InstanceId);
-        PlayerManager.Add(this);
     }
 
     public Client Client => ClientManager.Get(ClientId);

@@ -1,4 +1,5 @@
 ﻿using Relay.Clients;
+using Relay.Master;
 using Relay.Players;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;
@@ -62,5 +63,7 @@ public class QuitHandler : Handler
         
         // remove player
         PlayerManager.Remove(player);
+
+        MasterServer.UpdateImediately();
     }
 }

@@ -112,6 +112,9 @@ public class EnterHandler : Handler
         };
         player.Display = display ?? client.User.DisplayName;
         player.Status = PlayerStatus.Configuration;
+        PlayerManager.Add(player);
+
+        MasterServer.UpdateImediately();
 
         response.Write(EnterResult.Success);
         response.Write(player.Flags);

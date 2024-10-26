@@ -10,6 +10,8 @@
         public const ushort ConnectionTimeout = 15;
         public const byte MaxInstances = 3;
         public const bool PrintDebug = true;
+        public const ushort MinUpdateTime = 100;
+        public const ushort DefaultUpdateTime = 100;
     }
 
     public enum RequestType : byte
