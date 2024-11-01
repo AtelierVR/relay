@@ -21,10 +21,10 @@ public class QuitHandler : Handler
         var player = PlayerManager.GetFromClientInstance(client.Id, instanceId);
         if (player is not { Status: > PlayerStatus.None }) return;
         var action = buffer.ReadEnum<QuitType>();
-        LeavePlayer(player, action, buffer.ReadString() ?? "", player);
+        LeavePlayer(player, action, buffer.ReadString(), player, uid);
     }
 
-    public void LeavePlayer(Player player, QuitType type, string? reason = null, Player? by = null)
+    public void LeavePlayer(Player player, QuitType type, string? reason = null, Player? by = null, ushort uid = 0)
     {
         if (player.Status == PlayerStatus.None) return;
         if (type == QuitType.ModerationKick && (by?.Modered is null || !by.Modered.IsModerator)) return;
@@ -51,7 +51,7 @@ public class QuitHandler : Handler
         response.Write(type);
         if (reason is not null)
             response.Write(reason);
-        Request.SendBuffer(player.Client, response, ResponseType.Quit);
+        Request.SendBuffer(player.Client, response, ResponseType.Quit, uid);
 
         // leave event
         response = new Buffer();
@@ -60,7 +60,7 @@ public class QuitHandler : Handler
         response.Write(player.Id);
         foreach (var other in player.Instance.Players.Where(other => other != player))
             Request.SendBuffer(other.Client, response, ResponseType.Leave);
-        
+
         // remove player
         PlayerManager.Remove(player);
 
