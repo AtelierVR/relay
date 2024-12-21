@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Relay.Clients;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;
@@ -20,7 +20,7 @@ public class LantencyHandler : Handler
         var initial = buffer.ReadDateTime();
         var response = new Buffer();
         response.Write(initial);
-        response.Write(DateTime.Now);
+        response.Write(DateTime.UtcNow);
         Request.SendBuffer(client, response, ResponseType.Latency, uid);
     }
 }
