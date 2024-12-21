@@ -1,4 +1,4 @@
-﻿using Relay.Players;
+using Relay.Players;
 using Relay.Requests.Disconnect;
 using Relay.Requests.Instances.Quit;
 using Relay.Utils;
@@ -11,8 +11,8 @@ namespace Relay.Clients
         public ushort Id;
         public IRemote Remote;
         public ClientStatus Status;
-        public Platfrom Platform = Platfrom.None;
-        public Engine Engine = Engine.None;
+        public string Platform = "";
+        public string Engine = "";
         public DateTimeOffset LastSeen = DateTimeOffset.MinValue;
         public User? User = null;
 
