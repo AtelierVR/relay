@@ -29,11 +29,6 @@ public class Player
         set => _display = value;
     }
 
-    public Player()
-    {
-        Id = PlayerManager.GetNextId(InstanceId);
-    }
-
     public Client Client => ClientManager.Get(ClientId);
     public Instance Instance => InstanceManager.Get(InstanceId);
     

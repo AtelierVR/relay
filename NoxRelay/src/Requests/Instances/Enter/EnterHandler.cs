@@ -111,6 +111,7 @@ public class EnterHandler : Handler
             Flags = pFlags,
             Uid = PlayerManager.GenerateUid(),
         };
+        player.Id = PlayerManager.GetNextId(player.InstanceId);
         player.Display = display ?? client.User.DisplayName;
         player.Status = PlayerStatus.Configuration;
         PlayerManager.Add(player);
