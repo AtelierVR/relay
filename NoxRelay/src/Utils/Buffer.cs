@@ -143,7 +143,7 @@ namespace Relay.Utils
 
         public override string ToString()
         {
-            var res = $"Buffer[(offset={offset.ToString("X")}, length={length.ToString("X")}) ";
+            var res = $"Buffer[(offset={offset.ToString()}, length={length.ToString()}) ";
             try
             {
 
