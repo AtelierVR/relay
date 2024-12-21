@@ -1,4 +1,4 @@
-﻿using Relay.Clients;
+using Relay.Clients;
 using Relay.Players;
 using Relay.Utils;
 
@@ -6,7 +6,7 @@ namespace Relay.Instances;
 
 public class Instance
 {
-    public readonly ushort InternalId;
+    public readonly byte InternalId;
     public uint MasterId;
     public InstanceFlags Flags;
     public ushort Capacity = 0;

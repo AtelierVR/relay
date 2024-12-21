@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Linq;
 using Relay.Clients;
 using Relay.Players;
 using Relay.Requests.Instances.Enter;
@@ -19,12 +19,14 @@ public class ConfigHandler : Handler
         var type = buffer.ReadEnum<RequestType>();
         if (type != RequestType.Configuration) return;
         Logger.Debug($"{client} sent configuration");
-        var instanceId = buffer.ReadUShort();
-        var player = PlayerManager.GetFromClientInstance(client.Id, instanceId);
-        if (player is not { Status: PlayerStatus.Configuration }) return;
+        var internalId = buffer.ReadByte();
         var action = buffer.ReadEnum<ConfigurationAction>();
+        var player = PlayerManager.GetFromClientInstance(client.Id, internalId);
+        Logger.Debug($"{player} sent configuration {action}");
+        if (player is not { Status: PlayerStatus.Configuration }) return;
+
         var response = new Buffer();
-        response.Write(instanceId);
+        response.Write(internalId);
         switch (action)
         {
             case ConfigurationAction.Ready:

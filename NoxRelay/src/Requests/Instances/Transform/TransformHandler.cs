@@ -1,4 +1,4 @@
-﻿using Relay.Clients;
+using Relay.Clients;
 using Relay.Players;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;
@@ -15,8 +15,8 @@ internal class TransformHandler : Handler
         var uid = buffer.ReadUShort();
         var type = buffer.ReadEnum<RequestType>();
         if (type != RequestType.Transform) return;
-        var instanceId = buffer.ReadUShort();
-        var player = PlayerManager.GetFromClientInstance(client.Id, instanceId);
+        var internalId = buffer.ReadByte();
+        var player = PlayerManager.GetFromClientInstance(client.Id, internalId);
         if (player is not { Status: PlayerStatus.Ready }) return;
 
         var tr_type = buffer.ReadEnum<TransformType>();
@@ -26,7 +26,7 @@ internal class TransformHandler : Handler
         {
             case TransformType.OnPlayer:
                 var op_player_id = buffer.ReadUShort();
-                var op_player = PlayerManager.GetFromInstance(instanceId, op_player_id);
+                var op_player = PlayerManager.GetFromInstance(internalId, op_player_id);
 
                 if (op_player is not { Status: PlayerStatus.Ready }) return;
                 var isSelf = op_player.Client == client;
@@ -61,7 +61,7 @@ internal class TransformHandler : Handler
                 // send to all players in the instance except the sender
                 foreach (var other in PlayerManager.GetFromInstance(instanceId))
                     if (other.Client != client)
-                        SendTransform(other.Client, instanceId, op_player_id, op_player_rig, op_transform);
+                        SendTransform(other.Client, internalId, op_player_id, op_player_rig, op_transform);
 
                 op_transform.flags &= ~TransformFlags.Reset;
                 op_player.Transforms.Set(op_player_rig, op_transform);

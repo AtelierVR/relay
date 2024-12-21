@@ -1,4 +1,4 @@
-﻿namespace Relay.Master.Update;
+namespace Relay.Master.Update;
 
 public class RequestUpdate
 {
@@ -41,7 +41,7 @@ public class RequestPlayer
 
 public class RequestInstance
 {
-    public ushort internal_id { get; set; }
+    public byte internal_id { get; set; }
     public uint master_id { get; set; }
     public uint flags { get; set; }
     public RequestPlayer[] players { get; set; }

@@ -9,7 +9,7 @@ public class Player
     public ushort Id;
     public uint Uid;
     public ushort ClientId;
-    public ushort InstanceId;
+    public byte InstanceId;
     public PlayerStatus Status = PlayerStatus.None;
     private string _display;
     public DateTimeOffset CreatedAt = DateTimeOffset.Now;

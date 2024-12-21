@@ -1,4 +1,4 @@
-﻿using Relay.Clients;
+using Relay.Clients;
 using Relay.Master;
 using Relay.Players;
 using Relay.Utils;
@@ -17,8 +17,8 @@ public class QuitHandler : Handler
         var type = buffer.ReadEnum<RequestType>();
         if (type != RequestType.Quit) return;
         Logger.Debug($"{client} sent quit");
-        var instanceId = buffer.ReadUShort();
-        var player = PlayerManager.GetFromClientInstance(client.Id, instanceId);
+        var internalId = buffer.ReadByte();
+        var player = PlayerManager.GetFromClientInstance(client.Id, internalId);
         if (player is not { Status: > PlayerStatus.None }) return;
         var action = buffer.ReadEnum<QuitType>();
         LeavePlayer(player, action, buffer.ReadString(), player, uid);

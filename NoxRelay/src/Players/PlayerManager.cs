@@ -8,12 +8,12 @@ public class PlayerManager
 {
     public static List<Player> Players { get; set; } = new();
 
-    public static List<Player> GetFromInstance(ushort instanceId)
+    public static List<Player> GetFromInstance(byte instanceId)
         => Players.FindAll(player => player.InstanceId == instanceId);
-    public static Player? GetFromInstance(ushort instanceId, ushort playerId)
+    public static Player? GetFromInstance(byte instanceId, ushort playerId)
         => Players.Find(player => player.InstanceId == instanceId && player.Id == playerId);
 
-    public static Player? GetFromClientInstance(ushort clientId, ushort instanceId)
+    public static Player? GetFromClientInstance(ushort clientId, byte instanceId)
         => Players.Find(player => player.ClientId == clientId && player.InstanceId == instanceId);
 
     public static List<Player> GetFromClient(ushort clientId) => Players.FindAll(player => player.ClientId == clientId);

@@ -21,12 +21,12 @@ public class EnterHandler : Handler
         var type = buffer.ReadEnum<RequestType>();
         if (type != RequestType.Enter) return;
         Logger.Debug($"{client} sent enter");
-        var instanceId = buffer.ReadUShort();
-        var player = PlayerManager.GetFromClientInstance(client.Id, instanceId);
-        var instance = player?.Instance ?? InstanceManager.Get(instanceId);
+        var internalId = buffer.ReadByte();
+        var player = PlayerManager.GetFromClientInstance(client.Id, internalId);
+        var instance = player?.Instance ?? InstanceManager.Get(internalId);
 
         var response = new Buffer();
-        response.Write(instanceId);
+        response.Write(internalId);
         if (instance == null)
         {
             response.Write(EnterResult.NotFound);
