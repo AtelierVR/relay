@@ -1,4 +1,4 @@
-using Relay.Clients;
+﻿using Relay.Clients;
 using Relay.Master;
 using Relay.Players;
 using Relay.Utils;
@@ -37,7 +37,7 @@ public class QuitHandler : Handler
 
         if (player.Status == PlayerStatus.Ready)
             foreach (var other in player.Instance.Players.Where(other => other.Id != player.Id))
-        {
+            {
                 if (other is not { Status: PlayerStatus.Ready }) continue;
                 var allMessage = other.IsModerator
                     || by is not null && by.Id == other.Id;
@@ -56,12 +56,12 @@ public class QuitHandler : Handler
                 Request.SendBuffer(other.Client, response, ResponseType.Leave);
 
                 // send leave event to player of all other players
-            response = new Buffer();
-            response.Write(player.InstanceId);
-            response.Write(QuitType.Normal);
+                response = new Buffer();
+                response.Write(player.InstanceId);
+                response.Write(QuitType.Normal);
                 response.Write(other.Id);
                 Request.SendBuffer(player.Client, response, ResponseType.Leave);
-        }
+            }
 
         // send quit event to the player
         response = new Buffer();

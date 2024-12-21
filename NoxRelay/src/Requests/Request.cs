@@ -20,10 +20,14 @@ namespace Relay.Requests
 
             client.OnReceive(buffer);
             buffer.Goto(0);
-            if (buffer.ReadUShort() > buffer.length || buffer.length < 5)
+            var length = buffer.ReadUShort();
+
+            if (buffer.length < 5 || buffer.length < length)
             {
                 Logger.Warning($"{client} sent invalid buffer");
+                return;
             }
+
             buffer.Goto(0);
             foreach (var handler in Handler.Handlers)
                 handler.OnReceive(buffer, client);

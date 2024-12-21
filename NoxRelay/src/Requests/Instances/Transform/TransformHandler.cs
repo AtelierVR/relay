@@ -1,4 +1,4 @@
-using Relay.Clients;
+﻿using Relay.Clients;
 using Relay.Players;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;
@@ -59,7 +59,7 @@ internal class TransformHandler : Handler
                     op_transform.angularVelocity = buffer.ReadVector3();
 
                 // send to all players in the instance except the sender
-                foreach (var other in PlayerManager.GetFromInstance(instanceId))
+                foreach (var other in PlayerManager.GetFromInstance(internalId))
                     if (other.Client != client)
                         SendTransform(other.Client, internalId, op_player_id, op_player_rig, op_transform);
 

@@ -1,4 +1,5 @@
-using Relay.Clients;
+﻿using Relay.Clients;
+using Relay.Master;
 using Relay.Requests.Disconnect;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;
@@ -19,7 +20,7 @@ public class HandshakeHandler : Handler
         var protocol = buffer.ReadUShort();
         var engine = buffer.ReadString();
         var platform = buffer.ReadString();
-        
+
         if (protocol != Constants.ProtocolVersion)
         {
             Get<DisconnectHandler>().SendEvent(client,
@@ -30,7 +31,7 @@ public class HandshakeHandler : Handler
 
         client.Engine = engine ?? "";
         client.Platform = platform ?? "";
-        
+
         if (client.Status == ClientStatus.Disconnected)
             client.Status = ClientStatus.Handshaked;
 

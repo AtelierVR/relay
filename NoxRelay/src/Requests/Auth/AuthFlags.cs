@@ -1,4 +1,4 @@
-namespace Relay.Requests.Auth;
+﻿namespace Relay.Requests.Auth;
 
 public enum AuthFlags : byte
 {

@@ -1,4 +1,4 @@
-using Relay.Clients;
+﻿using Relay.Clients;
 using Relay.Instances;
 using Relay.Master;
 using Relay.Utils;
@@ -20,7 +20,7 @@ public class StatusHandler : Handler
         var pagnation = buffer.ReadByte();
         var response = new Buffer();
         var pages = GetPages((ushort)(Constants.MaxPacketSize - response.length - 2));
-        Logger.Debug($"{client} requested page {pagnation} of {pages.Length}");
+        Logger.Debug($"{client} requested page {pagnation+1} of {pages.Length}");
         if (pagnation >= pages.Length)
             response.Write((byte)0);
         else response.Write(pages[pagnation]);

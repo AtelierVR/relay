@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Relay.Clients;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;

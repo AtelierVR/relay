@@ -1,4 +1,4 @@
-using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json.Linq;
 using Relay.Clients;
 using Relay.Players;
 using Relay.Requests.Instances.Enter;
@@ -46,7 +46,7 @@ public class ConfigHandler : Handler
     {
         player.Status = PlayerStatus.Ready;
         var players = PlayerManager.GetFromInstance(player.InstanceId);
-        foreach (var other in players.Where(other => other != player))
+        foreach (var other in players.Where(other => other.Id != player.Id))
         {
             if (other is not { Status: PlayerStatus.Ready }) continue;
             EnterHandler.SendJoin(other.Client, player);

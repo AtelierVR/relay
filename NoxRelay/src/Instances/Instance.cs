@@ -1,4 +1,4 @@
-using Relay.Clients;
+﻿using Relay.Clients;
 using Relay.Players;
 using Relay.Utils;
 
@@ -14,10 +14,10 @@ public class Instance
     private List<UserModered> _modereds = [];
     public World World;
 
-    public UserModered GetModered(uint userId, string address) =>
+    public UserModered? GetModered(uint userId, string address) =>
         _modereds.FirstOrDefault(m => m.UserId == userId || m.Address == address);
 
-    public UserModered GetModered(User user) => GetModered(user.Id, user.Address);
+    public UserModered? GetModered(User user) => GetModered(user.Id, user.Address);
 
     private string _password;
 

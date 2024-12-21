@@ -1,4 +1,4 @@
-namespace Relay.Master.Update;
+﻿namespace Relay.Master.Update;
 
 public class RequestUpdate
 {
