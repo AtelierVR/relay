@@ -31,21 +31,39 @@ public class QuitHandler : Handler
         if (type == QuitType.VoteKick && by != null) return;
         if (type == QuitType.Timeout && by != player) return;
         if (type == QuitType.Normal && by != player) return;
-        player.Status = PlayerStatus.None;
         Logger.Log($"{player} left the instance");
 
-        // other players leave event
         Buffer response;
-        foreach (var other in player.Instance.Players.Where(other => other != player))
+
+        if (player.Status == PlayerStatus.Ready)
+            foreach (var other in player.Instance.Players.Where(other => other.Id != player.Id))
         {
+                if (other is not { Status: PlayerStatus.Ready }) continue;
+                var allMessage = other.IsModerator
+                    || by is not null && by.Id == other.Id;
+
+                // broadcast leave event to other players of the player
+                response = new Buffer();
+                response.Write(player.InstanceId);
+                response.Write(allMessage ? QuitType.Normal : type);
+                response.Write(player.Id);
+                if (allMessage && (type & QuitType.ModerationAction) != 0)
+                {
+                    response.Write(by?.Id ?? ushort.MaxValue);
+                    if (!string.IsNullOrEmpty(reason))
+                        response.Write(reason);
+                }
+                Request.SendBuffer(other.Client, response, ResponseType.Leave);
+
+                // send leave event to player of all other players
             response = new Buffer();
             response.Write(player.InstanceId);
             response.Write(QuitType.Normal);
-            response.Write(player.Id);
-            Request.SendBuffer(other.Client, response, ResponseType.Quit);
+                response.Write(other.Id);
+                Request.SendBuffer(player.Client, response, ResponseType.Leave);
         }
 
-        // quit event
+        // send quit event to the player
         response = new Buffer();
         response.Write(player.InstanceId);
         response.Write(type);
@@ -53,15 +71,8 @@ public class QuitHandler : Handler
             response.Write(reason);
         Request.SendBuffer(player.Client, response, ResponseType.Quit, uid);
 
-        // leave event
-        response = new Buffer();
-        response.Write(player.InstanceId);
-        response.Write(type);
-        response.Write(player.Id);
-        foreach (var other in player.Instance.Players.Where(other => other != player))
-            Request.SendBuffer(other.Client, response, ResponseType.Leave);
-
         // remove player
+        player.Status = PlayerStatus.None;
         PlayerManager.Remove(player);
 
         MasterServer.UpdateImediately();
