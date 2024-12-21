@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net.Http;
 using System.Threading;
 using Relay.Clients;
@@ -21,8 +21,7 @@ public class AuthHandler : Handler
         Logger.Debug($"{client} sent authentification");
         var flags = buffer.ReadEnum<AuthFlags>();
         var userId = buffer.ReadUInt();
-        var serverAddress = buffer.ReadString();
-        if (flags.HasFlag(AuthFlags.UseUnAuthentified))
+        if (flags.HasFlag(AuthFlags.UseUnAuthenticated))
         {
             var response = new Buffer();
             response.Write(AuthResult.Unknown);

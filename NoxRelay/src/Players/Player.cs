@@ -7,6 +7,7 @@ namespace Relay.Players;
 public class Player
 {
     public ushort Id;
+    public uint Uid;
     public ushort ClientId;
     public ushort InstanceId;
     public PlayerStatus Status = PlayerStatus.None;

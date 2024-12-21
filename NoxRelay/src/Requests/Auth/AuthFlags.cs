@@ -1,8 +1,8 @@
-﻿namespace Relay.Requests.Auth;
+namespace Relay.Requests.Auth;
 
 public enum AuthFlags : byte
 {
     None = 0,
     UseIntegrity = 1,
-    UseUnAuthentified = 2
+    UseUnAuthenticated = 2
 }

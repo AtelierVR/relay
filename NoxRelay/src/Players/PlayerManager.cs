@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using Relay.Clients;
 
@@ -26,6 +26,17 @@ public class PlayerManager
         while (Players.Exists(player => player.Id == id && player.InstanceId == instanceId))
             id++;
         return id;
+    }
+
+    public static uint GenerateUid()
+    {
+        uint uid;
+        var rand = new Random();
+        do
+        {
+            uid = (uint)rand.Next();
+        } while (Players.Exists(player => player.Uid == uid));
+        return uid;
     }
 
     public static void Remove(Player player) => Players.Remove(player);

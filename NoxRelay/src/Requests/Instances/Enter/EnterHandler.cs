@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net.Http;
 using System.Threading;
 using Relay.Clients;
@@ -107,8 +107,9 @@ public class EnterHandler : Handler
         player = new Player
         {
             ClientId = client.Id,
-            InstanceId = instanceId,
-            Flags = pFlags
+            InstanceId = instance.InternalId,
+            Flags = pFlags,
+            Uid = PlayerManager.GenerateUid(),
         };
         player.Display = display ?? client.User.DisplayName;
         player.Status = PlayerStatus.Configuration;
@@ -119,6 +120,8 @@ public class EnterHandler : Handler
         response.Write(EnterResult.Success);
         response.Write(player.Flags);
         response.Write(player.Id);
+        response.Write(player.Client.User?.Id ?? player.Uid);
+        response.Write(player.Client.User?.Address ?? "");
         response.Write(player.Display);
         response.Write(player.CreatedAt);
         response.Write(player.Instance.MaxTps);
@@ -132,7 +135,8 @@ public class EnterHandler : Handler
         response.Write(player.InstanceId);
         response.Write(player.Flags);
         response.Write(player.Id);
-        response.Write(player.Client.User?.Id ?? uint.MinValue);
+        response.Write(player.Client.User?.Id ?? player.Uid);
+        response.Write(player.Client.User?.Address ?? "");
         response.Write(player.Display);
         response.Write(player.CreatedAt);
         response.Write(player.Client.Engine);
