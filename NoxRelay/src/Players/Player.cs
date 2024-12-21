@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Relay.Clients;
 using Relay.Instances;
 
@@ -16,11 +16,11 @@ public class Player
 
     public PlayerTransform Transforms = new();
 
-    public UserModered Modered => Instance.GetModered(Client.User);
+    public UserModered? Modered => Instance.GetModered(Client.User);
     public bool IsModerator 
-        => Flags.HasFlag(PlayerFlags.IsModerator) 
-        || Flags.HasFlag(PlayerFlags.IsOwner)
-        || Modered.IsModerator;
+        => (Flags & PlayerFlags.IsModerator) != 0
+        || (Flags & PlayerFlags.IsOwner) != 0
+        || Modered?.IsModerator == true;
 
     public string Display
     {
