@@ -41,8 +41,13 @@ public class HandshakeHandler : Handler
         response.Write(client.Status);
         response.Write(client.Remote.Address.GetAddressBytes());
         response.Write(client.Remote.Port);
-        response.Write((byte)0x00);
-        response.Write(MasterServer.MasterAddress);
+        HandshakeFlags flags = HandshakeFlags.None;
+        if (string.IsNullOrEmpty(MasterServer.MasterAddress))
+            flags |= HandshakeFlags.IsOffline;
+        response.Write(flags);
+        if(!flags.HasFlag(HandshakeFlags.IsOffline))
+            response.Write(MasterServer.MasterAddress);
+
         Request.SendBuffer(client, response, ResponseType.Handshake, uid);
     }
 }

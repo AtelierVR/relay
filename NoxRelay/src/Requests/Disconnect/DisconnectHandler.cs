@@ -15,7 +15,7 @@ public class DisconnectHandler : Handler
         var type = buffer.ReadEnum<RequestType>();
         if (type != RequestType.Disconnect) return;
         var reason = buffer.ReadString();
-        SendEvent(client, reason ?? "");
+        SendEvent(client, "Good Bye!");
     }
 
     public void SendEvent(Client client, string reason)
