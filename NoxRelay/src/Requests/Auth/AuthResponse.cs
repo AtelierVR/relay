@@ -28,9 +28,12 @@ public class AuthUserResponse
 
 public class AuthBlacklistedResponse
 {
-    public uint id { get; set; }
     public ulong expires { get; set; }
-    public DateTimeOffset ExprireAt => DateTimeOffset.FromUnixTimeMilliseconds((long)expires);
+    public string reason { get; set; }
 
-    public override string ToString() => $"{GetType().Name}[id={id}, ExprireAt={ExprireAt}]";
+    public DateTimeOffset ExprireAt 
+        => DateTimeOffset.FromUnixTimeMilliseconds((long)expires);
+
+    public override string ToString() 
+        => $"{GetType().Name}[exprire={ExprireAt}, reason={reason}]";
 }

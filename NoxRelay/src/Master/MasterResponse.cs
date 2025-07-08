@@ -8,10 +8,15 @@ public class MasterResponse<T>
     public ulong time { get; set; }
     public string request { get; set; }
     public MasterResponseError error { get; set; }
-    public DateTime GetTime() => new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMilliseconds(time);
-    public bool HasError() => error is { status: > 0 };
 
-    public override string ToString() => $"{GetType().Name}[{(HasError() ? $"error={error}" : $"data={data}, time={GetTime()}, request={request}")}]";
+    public DateTimeOffset GetTime() 
+        => DateTimeOffset.FromUnixTimeMilliseconds((long)time);
+
+    public bool HasError() 
+        => error is { code: > 0 };
+
+    public override string ToString() 
+        => $"{GetType().Name}[{(HasError() ? $"error={error}" : $"data={data}, time={GetTime()}, request={request}")}]";
 }
 
 public class MasterResponseError
@@ -20,5 +25,6 @@ public class MasterResponseError
     public ushort code { get; set; }
     public ushort status { get; set; }
     
-    public override string ToString() => $"{GetType().Name}[message={message}, code={code}, status={status}]";
+    public override string ToString() 
+        => $"{GetType().Name}[message={message}, code={code}, status={status}]";
 }

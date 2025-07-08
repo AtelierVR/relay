@@ -20,47 +20,39 @@ public class AuthHandler : Handler
         if (type != RequestType.Authentification) return;
         Logger.Debug($"{client} sent authentification");
         var flags = buffer.ReadEnum<AuthFlags>();
-        var userId = buffer.ReadUInt();
-        if (flags.HasFlag(AuthFlags.UseUnAuthenticated))
-        {
-            var response = new Buffer();
-            response.Write(AuthResult.Unknown);
-            Request.SendBuffer(client, response, ResponseType.Authentification, uid);
-            return;
-        }
 
-        if (flags.HasFlag(AuthFlags.UseIntegrity))
+        if (flags.HasFlag(AuthFlags.UseGuest))
         {
-            var serverAddress = buffer.ReadString();
             var response = new Buffer();
             response.Write(AuthResult.Unknown);
+            response.Write("This server does not support unauthenticated access.");
             Request.SendBuffer(client, response, ResponseType.Authentification, uid);
             return;
         }
 
         var accessToken = buffer.ReadString();
+        Logger.Debug($"aa {flags} {flags.HasFlag(AuthFlags.UseIntegrity)}");
+
         var thread = new Thread(() => WorkerAuth(
             client, 
-            uid, 
-            userId, 
+            uid,
             accessToken, 
             flags.HasFlag(AuthFlags.UseIntegrity) ? "integrity" : "bearer")
         );
         thread.Start();
     }
 
-    public static async void WorkerAuth(Client client, ushort uid, uint userId, string accessToken, string type)
+    public static async void WorkerAuth(Client client, ushort uid, string accessToken, string type)
     {
         var lastStatus = client.Status;
         var bearer = new AuthRequest
         {
             access_token = accessToken,
-            user_id = userId,
             token_type = type,
             ip = client.Remote.Address.ToString()
         };
         client.Status = ClientStatus.Authentificating;
-        Logger.Debug($"{client} authentificating with {bearer.access_token} as {bearer.user_id}");
+        Logger.Debug($"{client} authentificating with {bearer.access_token} with {type}");
         var response = await MasterServer.Request<AuthResponse, AuthRequest>(
             "/api/relays/checkbearer",
             HttpMethod.Post, bearer
@@ -69,7 +61,8 @@ public class AuthHandler : Handler
         {
             var buffer = new Buffer();
             Logger.Debug($"{client} authentification error {response.error}");
-            buffer.Write(AuthResult.CannotContactMasterServer);
+            buffer.Write(AuthResult.MasterError);
+            buffer.Write(response.error.message);
             Request.SendBuffer(client, buffer, ResponseType.Authentification, uid);
             client.Status = lastStatus;
         }
@@ -94,10 +87,10 @@ public class AuthHandler : Handler
             else if (response.data.is_blacklisted)
             {
                 buffer.Write(AuthResult.Blacklisted);
-                buffer.Write(response.data.blacklisted.id);
-                buffer.Write((DateTimeOffset.Now - response.data.blacklisted.ExprireAt).TotalMinutes);
+                buffer.Write(response.data.blacklisted.ExprireAt);
+                buffer.Write(response.data.blacklisted.reason);
                 client.Status = lastStatus;
-                Logger.Debug($"{client} authentification error blacklisted {response.data.blacklisted.id}");
+                Logger.Debug($"{client} authentification error blacklisted {response.data.blacklisted.reason} for {response.data.user.id}@{response.data.user.server}");
             }
             else if (response.data.is_invalid_token)
             {
@@ -108,6 +101,7 @@ public class AuthHandler : Handler
             else
             {
                 buffer.Write(AuthResult.Unknown);
+                buffer.Write("Unknown authentification error.");
                 client.Status = lastStatus;
                 Logger.Debug($"{client} authentification error unknown");
             }
