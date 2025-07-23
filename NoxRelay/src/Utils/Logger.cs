@@ -24,6 +24,11 @@ public class Logger
         Console.WriteLine(Format, LastDate, "WARNING", string.Format(message, args));
     }
 
+    public static void Exception(Exception ex)
+    {
+        Console.WriteLine(Format, LastDate, "EXCEPTION", $"{ex.Message}\n{ex.StackTrace}");
+    }
+
     public static void Debug(string message, params object[] args)
     {
         if (!PrintDebug) return;

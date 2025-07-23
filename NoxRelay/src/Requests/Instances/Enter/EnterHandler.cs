@@ -52,8 +52,8 @@ public class EnterHandler : Handler
         if (modered is { IsBlacklisted: true })
         {
             response.Write(EnterResult.Blacklisted);
+            response.Write(modered.BlacklistExpiresAt);
             response.Write(modered.BlacklistReason);
-            response.Write((uint)modered.BlacklistExpiresAt.ToUnixTimeSeconds());
             Request.SendBuffer(client, response, ResponseType.Enter, uid);
             return;
         }

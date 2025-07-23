@@ -70,6 +70,7 @@ namespace Relay.Master
                 internal_id = instance.InternalId,
                 master_id = instance.MasterId,
                 flags = (uint)instance.Flags,
+                max_players = instance.Capacity,
                 players = instance.Players.ToArray().Select(player => new RequestPlayer
                 {
                     id = player.Id,
@@ -78,8 +79,7 @@ namespace Relay.Master
                     flags = (uint)player.Flags,
                     status = (byte)player.Status,
                     created_at = (ulong)player.CreatedAt.ToUnixTimeMilliseconds()
-                }).ToArray(),
-                max_players = instance.Capacity
+                }).ToArray()
             }).ToArray();
 
             var request = new RequestUpdate()
@@ -165,7 +165,7 @@ namespace Relay.Master
                 client.DefaultRequestHeaders.Authorization =
                     new System.Net.Http.Headers.AuthenticationHeaderValue("Badger", _token);
                 client.Timeout = TimeSpan.FromSeconds(2);
-                var request = new HttpRequestMessage(method, $"{ServerGateway}{path}");
+                var request = new HttpRequestMessage(method, $"{ServerGateway.TrimEnd('/')}{path}");
                 if (data != null)
                 {
                     var str = JsonConvert.SerializeObject(data);
@@ -175,10 +175,13 @@ namespace Relay.Master
                 }
                 var response = await client.SendAsync(request);
                 var responseString = await response.Content.ReadAsStringAsync();
-                return JObject.Parse(responseString).ToObject<MasterResponse<T>>();
+                return JObject
+                    .Parse(responseString)
+                    .ToObject<MasterResponse<T>>();
             }
             catch (Exception e)
             {
+                Logger.Exception(e);
                 return new MasterResponse<T>()
                 {
                     error = new MasterResponseError() { message = e.Message, code = 1, status = 500 }
