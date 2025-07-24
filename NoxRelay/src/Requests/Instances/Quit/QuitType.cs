@@ -7,7 +7,7 @@ public enum QuitType : byte
     ModerationKick = 2,
     VoteKick = 3,
     ConfigurationError = 4,
-    UnknowError = 5,
+    UnknownError = 5,
 
     ModerationAction = ModerationKick | VoteKick
 }

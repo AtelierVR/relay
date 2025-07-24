@@ -21,7 +21,10 @@ public class QuitHandler : Handler
         var player = PlayerManager.GetFromClientInstance(client.Id, internalId);
         if (player is not { Status: > PlayerStatus.None }) return;
         var action = buffer.ReadEnum<QuitType>();
-        LeavePlayer(player, action, buffer.ReadString(), player, uid);
+        string? reason = null;
+        if (buffer.Remaining() > 2)
+            reason = buffer.ReadString();
+        LeavePlayer(player, action, reason, player, uid);
     }
 
     public void LeavePlayer(Player player, QuitType type, string? reason = null, Player? by = null, ushort uid = 0)
@@ -67,7 +70,7 @@ public class QuitHandler : Handler
         response = new Buffer();
         response.Write(player.InstanceId);
         response.Write(type);
-        if (reason is not null)
+        if (!string.IsNullOrEmpty(reason))
             response.Write(reason);
         Request.SendBuffer(player.Client, response, ResponseType.Quit, uid);
 

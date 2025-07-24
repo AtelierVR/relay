@@ -16,7 +16,7 @@ namespace Relay.Requests
                 client = new Client { Remote = remote };
                 client.OnConnect();
             }
-            client.LastSeen = DateTimeOffset.Now;
+            client.LastSeen = DateTimeOffset.UtcNow;
 
             client.OnReceive(buffer);
             buffer.Goto(0);
@@ -48,10 +48,11 @@ namespace Relay.Requests
         public static async void Check()
         {
             var config = Config.Load();
+            Logger.Debug($"Clients timeout set to {config.GetConnectionTimeout()} seconds");
             while (true)
             {
                 foreach (var client in ClientManager.Clients.ToArray())
-                    if (client.LastSeen.AddSeconds(config.GetConnectionTimeout()) < DateTime.Now)
+                    if (client.LastSeen.AddSeconds(config.GetConnectionTimeout()) < DateTime.UtcNow)
                         client.OnTimeout();
                 await Task.Delay(1000);
             }

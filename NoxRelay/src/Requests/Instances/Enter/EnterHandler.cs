@@ -5,6 +5,8 @@ using Relay.Clients;
 using Relay.Instances;
 using Relay.Master;
 using Relay.Players;
+using Relay.Requests.Instances.Quit;
+using Relay.Requests.Instances.Traveling;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;
 
@@ -109,14 +111,13 @@ public class EnterHandler : Handler
             ClientId = client.Id,
             InstanceId = instance.InternalId,
             Flags = pFlags,
+            Status = PlayerStatus.Preparing,
             Uid = PlayerManager.GenerateUid(),
         };
+
         player.Id = PlayerManager.GetNextId(player.InstanceId);
         player.Display = display ?? client.User.DisplayName;
-        player.Status = PlayerStatus.Configuration;
         PlayerManager.Add(player);
-
-        MasterServer.UpdateImediately();
 
         response.Write(EnterResult.Success);
         response.Write(player.Flags);

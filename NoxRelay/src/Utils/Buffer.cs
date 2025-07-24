@@ -275,6 +275,9 @@ namespace Relay.Utils
             data = new byte[Constants.MaxPacketSize];
         }
 
+        public int Remaining()
+            => length - offset;
+
         public bool Write(Buffer buffer)
         {
             if (offset + buffer.length > data.Length) return false;
