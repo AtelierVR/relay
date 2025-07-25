@@ -1,4 +1,5 @@
 ﻿using Relay.Clients;
+using Relay.Instances;
 using Relay.Master;
 using Relay.Players;
 using Relay.Utils;
@@ -18,7 +19,7 @@ public class QuitHandler : Handler
         if (type != RequestType.Quit) return;
         Logger.Debug($"{client} sent quit");
         var internalId = buffer.ReadByte();
-        var player = PlayerManager.GetFromClientInstance(client.Id, internalId);
+        var player = client.GetInstancePlayer(internalId);
         if (player is not { Status: > PlayerStatus.None }) return;
         var action = buffer.ReadEnum<QuitType>();
         string? reason = null;
@@ -34,12 +35,13 @@ public class QuitHandler : Handler
         if (type == QuitType.VoteKick && by != null) return;
         if (type == QuitType.Timeout && by != player) return;
         if (type == QuitType.Normal && by != player) return;
+        var ins = player.Instance;
         Logger.Log($"{player} left the instance");
 
         Buffer response;
 
         if (player.Status == PlayerStatus.Ready)
-            foreach (var other in player.Instance.Players.Where(other => other.Id != player.Id))
+            foreach (var other in ins.Players.Where(other => other.Id != player.Id))
             {
                 if (other is not { Status: PlayerStatus.Ready }) continue;
                 var allMessage = other.IsModerator
@@ -76,7 +78,10 @@ public class QuitHandler : Handler
 
         // remove player
         player.Status = PlayerStatus.None;
-        PlayerManager.Remove(player);
+        ins.RemovePlayer(player);
+
+
+        Logger.Debug($"rm: Total players: {ins.GetPlayers().Length}");
 
         MasterServer.UpdateImediately();
     }

@@ -18,7 +18,7 @@ public class TravelingHandler : Handler
         if (type != RequestType.Traveling) return;
         var internalId = buffer.ReadByte();
         var action = buffer.ReadEnum<TravelingAction>();
-        var player = PlayerManager.GetFromClientInstance(client.Id, internalId);
+        var player = client.GetInstancePlayer(internalId);
         if (player is not { Status: > PlayerStatus.None }) return;
 
         if (action.HasFlag(TravelingAction.Travel))
@@ -48,7 +48,6 @@ public class TravelingHandler : Handler
         Request.SendBuffer(player.Client, response, ResponseType.Traveling, uid);
 
         player.Status = PlayerStatus.Traveling;
-        PlayerManager.Remove(player);
 
         MasterServer.UpdateImediately();
     }

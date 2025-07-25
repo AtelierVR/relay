@@ -1,4 +1,5 @@
-﻿using Relay.Players;
+﻿using Relay.Instances;
+using Relay.Players;
 using Relay.Requests.Disconnect;
 using Relay.Requests.Instances.Quit;
 using Relay.Utils;
@@ -16,7 +17,22 @@ namespace Relay.Clients
         public DateTimeOffset LastSeen = DateTimeOffset.MinValue;
         public User? User = null;
 
-        public List<Player> Players => PlayerManager.GetFromClient(Id);
+        public List<Player> GetPlayers()
+        {
+            List<Player> players = new();
+            foreach (var instance in InstanceManager.Instances)
+                foreach (var player in instance.Players)
+                    if (player.ClientId == Id)
+                        players.Add(player);
+            return players;
+        }
+
+        public Player? GetInstancePlayer(byte instanceId)
+        {
+            var instance = InstanceManager.Get(instanceId);
+            if (instance == null) return null;
+            return instance.Players.FirstOrDefault(player => player.ClientId == Id);
+        }
 
         public Client()
         {
@@ -31,7 +47,8 @@ namespace Relay.Clients
 
         public void OnDisconnect(string reason)
         {
-            Players.ForEach(player => Handler.Get<QuitHandler>().LeavePlayer(player, QuitType.Normal, null, player));
+            foreach (var player in GetPlayers())
+                Handler.Get<QuitHandler>().LeavePlayer(player, QuitType.Normal, null, player);
             Logger.Log($"{this} disconnected");
         }
 
@@ -45,7 +62,8 @@ namespace Relay.Clients
         public void OnTimeout()
         {
             Logger.Warning($"{this} timed out");
-            Players.ForEach(player => Handler.Get<QuitHandler>().LeavePlayer(player, QuitType.Timeout, null, player));
+            foreach(var player in GetPlayers())
+                Handler.Get<QuitHandler>().LeavePlayer(player, QuitType.Timeout, null, player);
             Handler.Get<DisconnectHandler>().SendEvent(this, Messages.ConnectionTimeout);
             ClientManager.Remove(this);
         }

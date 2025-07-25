@@ -16,7 +16,7 @@ internal class TransformHandler : Handler
         var type = buffer.ReadEnum<RequestType>();
         if (type != RequestType.Transform) return;
         var internalId = buffer.ReadByte();
-        var player = PlayerManager.GetFromClientInstance(client.Id, internalId);
+        var player = client.GetInstancePlayer(internalId);
         if (player is not { Status: PlayerStatus.Ready }) return;
 
         var tr_type = buffer.ReadEnum<TransformType>();
@@ -26,7 +26,7 @@ internal class TransformHandler : Handler
         {
             case TransformType.OnPlayer:
                 var op_player_id = buffer.ReadUShort();
-                var op_player = PlayerManager.GetFromInstance(internalId, op_player_id);
+                var op_player = client.GetInstancePlayer(internalId);
 
                 if (op_player is not { Status: PlayerStatus.Ready }) return;
                 var isSelf = op_player.Client == client;
@@ -59,7 +59,7 @@ internal class TransformHandler : Handler
                     op_transform.angularVelocity = buffer.ReadVector3();
 
                 // send to all players in the instance except the sender
-                foreach (var other in PlayerManager.GetFromInstance(internalId))
+                foreach (var other in op_player.Instance.GetPlayers())
                     if (other.Client != client)
                         SendTransform(other.Client, internalId, op_player_id, op_player_rig, op_transform);
 

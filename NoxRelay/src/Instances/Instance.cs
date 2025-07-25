@@ -14,14 +14,15 @@ public class Instance
     private List<UserModered> _modereds = [];
     public World World;
 
-    public UserModered? GetModered(uint userId, string address) =>
-        _modereds.FirstOrDefault(m => m.UserId == userId || m.Address == address);
+    public UserModered? GetModered(uint userId, string address)
+        => _modereds.FirstOrDefault(m => m.UserId == userId || m.Address == address);
 
-    public UserModered? GetModered(User user) => GetModered(user.Id, user.Address);
+    public UserModered? GetModered(User user) 
+        => GetModered(user.Id, user.Address);
 
-    private string _password;
+    private string? _password;
 
-    public string Password
+    public string? Password
     {
         get => Flags.HasFlag(InstanceFlags.UsePassword) ? _password : null;
         set
@@ -39,10 +40,11 @@ public class Instance
         }
     }
 
-    public bool VerifyPassword(string password) =>
-        string.IsNullOrEmpty(password) || Hashing.Verify(password, _password);
+    public bool VerifyPassword(string password) 
+        => string.IsNullOrEmpty(Password) || (!string.IsNullOrEmpty(password) && Hashing.Verify(password, Password));
 
-    public List<Player> Players => PlayerManager.GetFromInstance(InternalId);
+    public Player[] Players
+        => PlayerManager.GetFromInstance(InternalId);
 
     public Instance()
     {
@@ -51,5 +53,9 @@ public class Instance
         InstanceManager.Add(this);
     }
 
-    public override string ToString() => $"{GetType().Name}[InternalId={InternalId}, MasterId={MasterId}, PlayerCount={Players.Count}/{Capacity}]";
+    public override string ToString() 
+        => $"{GetType().Name}[InternalId={InternalId}, MasterId={MasterId}, PlayerCount={Players.Length}/{Capacity}]";
+
+    public Player[] GetPlayers()
+        => _players.ToArray();
 }

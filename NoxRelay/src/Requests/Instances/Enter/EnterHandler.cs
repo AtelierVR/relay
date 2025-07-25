@@ -24,7 +24,7 @@ public class EnterHandler : Handler
         if (type != RequestType.Enter) return;
         Logger.Debug($"{client} sent enter");
         var internalId = buffer.ReadByte();
-        var player = PlayerManager.GetFromClientInstance(client.Id, internalId);
+        var player = client.GetInstancePlayer(internalId);
         var instance = player?.Instance ?? InstanceManager.Get(internalId);
 
         var response = new Buffer();
@@ -43,7 +43,7 @@ public class EnterHandler : Handler
             return;
         }
 
-        if (instance.Capacity <= instance.Players.Count && !instance.Flags.HasFlag(InstanceFlags.AllowOverload) || instance.Players.Count >= ushort.MaxValue)
+        if (instance.Capacity <= instance.Players.Length && !instance.Flags.HasFlag(InstanceFlags.AllowOverload) || instance.Players.Length >= ushort.MaxValue)
         {
             response.Write(EnterResult.Full);
             Request.SendBuffer(client, response, ResponseType.Enter, uid);
@@ -106,28 +106,30 @@ public class EnterHandler : Handler
             return;
         }
 
-        player = new Player
+        var nPlayer = new Player
         {
+            Id = instance.GetNextPlayerId(),
             ClientId = client.Id,
             InstanceId = instance.InternalId,
             Flags = pFlags,
             Status = PlayerStatus.Preparing,
-            Uid = PlayerManager.GenerateUid(),
+            Display = display ?? string.Empty
         };
 
-        player.Id = PlayerManager.GetNextId(player.InstanceId);
-        player.Display = display ?? client.User.DisplayName;
-        PlayerManager.Add(player);
+        instance.AddPlayer(nPlayer);
+        MasterServer.UpdateImediately();
+
+        Logger.Debug($"Total instances: {instance.Players.Length}, Total players: {instance.GetPlayers().Length}");
 
         response.Write(EnterResult.Success);
-        response.Write(player.Flags);
-        response.Write(player.Id);
-        response.Write(player.Client.User?.Id ?? player.Uid);
-        response.Write(player.Client.User?.Address ?? "");
-        response.Write(player.Display);
-        response.Write(player.CreatedAt);
-        response.Write(player.Instance.MaxTps);
-        Logger.Log($"{player} entered {instance}");
+        response.Write(nPlayer.Flags);
+        response.Write(nPlayer.Id);
+        response.Write(nPlayer.Client.User?.Id ?? 0);
+        response.Write(nPlayer.Client.User?.Address ?? string.Empty);
+        response.Write(nPlayer.Display);
+        response.Write(nPlayer.CreatedAt);
+        response.Write(nPlayer.Instance.MaxTps);
+        Logger.Log($"{nPlayer} entered {instance}");
         Request.SendBuffer(client, response, ResponseType.Enter, uid);
     }
 
@@ -137,7 +139,7 @@ public class EnterHandler : Handler
         response.Write(player.InstanceId);
         response.Write(player.Flags);
         response.Write(player.Id);
-        response.Write(player.Client.User?.Id ?? player.Uid);
+        response.Write(player.Client.User?.Id ?? 0);
         response.Write(player.Client.User?.Address ?? "");
         response.Write(player.Display);
         response.Write(player.CreatedAt);

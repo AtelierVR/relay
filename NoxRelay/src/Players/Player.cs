@@ -7,7 +7,6 @@ namespace Relay.Players;
 public class Player
 {
     public ushort Id;
-    public uint Uid;
     public ushort ClientId;
     public byte InstanceId;
     public PlayerStatus Status = PlayerStatus.None;
@@ -29,7 +28,8 @@ public class Player
 
     public string Display
     {
-        get => _display ?? Client.User?.DisplayName ?? $"Player {Id}";
+        get => (string.IsNullOrEmpty(_display) ? null : _display)
+            ?? Client.User?.DisplayName ?? $"Player {Id}";
         set => _display = value;
     }
 
