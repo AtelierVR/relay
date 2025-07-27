@@ -59,7 +59,7 @@ internal class TransformHandler : Handler
                     op_transform.angularVelocity = buffer.ReadVector3();
 
                 // send to all players in the instance except the sender
-                foreach (var other in op_player.Instance.GetPlayers())
+                foreach (var other in op_player.Instance.Players)
                     if (other.Client != client)
                         SendTransform(other.Client, internalId, op_player_id, op_player_rig, op_transform);
 

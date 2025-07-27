@@ -78,10 +78,10 @@ public class QuitHandler : Handler
 
         // remove player
         player.Status = PlayerStatus.None;
-        ins.RemovePlayer(player);
+        ins.Players.Add(player);
 
 
-        Logger.Debug($"rm: Total players: {ins.GetPlayers().Length}");
+        Logger.Debug($"rm: Total players: {ins.Players.Count}");
 
         MasterServer.UpdateImediately();
     }

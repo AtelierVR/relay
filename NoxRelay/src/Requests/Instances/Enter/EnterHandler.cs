@@ -16,7 +16,7 @@ public class EnterHandler : Handler
 {
     public override void OnReceive(Buffer buffer, Client client)
     {
-        if (client.Status != ClientStatus.Authentificated) return;
+        if (client.Status != ClientStatus.Authentificated || client.User == null) return;
         buffer.Goto(0);
         var length = buffer.ReadUShort();
         var uid = buffer.ReadUShort();
@@ -43,7 +43,7 @@ public class EnterHandler : Handler
             return;
         }
 
-        if (instance.Capacity <= instance.Players.Length && !instance.Flags.HasFlag(InstanceFlags.AllowOverload) || instance.Players.Length >= ushort.MaxValue)
+        if (instance.Capacity <= instance.Players.Count && !instance.Flags.HasFlag(InstanceFlags.AllowOverload) || instance.Players.Count >= ushort.MaxValue)
         {
             response.Write(EnterResult.Full);
             Request.SendBuffer(client, response, ResponseType.Enter, uid);
@@ -116,10 +116,10 @@ public class EnterHandler : Handler
             Display = display ?? string.Empty
         };
 
-        instance.AddPlayer(nPlayer);
+        instance.Players.Add(nPlayer);
         MasterServer.UpdateImediately();
 
-        Logger.Debug($"Total instances: {instance.Players.Length}, Total players: {instance.GetPlayers().Length}");
+        Logger.Debug($"Total instances: {instance.Players.Count}, Total players: {instance.Players.Count}");
 
         response.Write(EnterResult.Success);
         response.Write(nPlayer.Flags);
@@ -128,7 +128,8 @@ public class EnterHandler : Handler
         response.Write(nPlayer.Client.User?.Address ?? string.Empty);
         response.Write(nPlayer.Display);
         response.Write(nPlayer.CreatedAt);
-        response.Write(nPlayer.Instance.MaxTps);
+        response.Write(nPlayer.CustomTps == 0 ? nPlayer.Instance.Tps : nPlayer.CustomTps);
+        response.Write(nPlayer.CustomThreshold == 0 ? nPlayer.Instance.Threshold : nPlayer.CustomThreshold);
         Logger.Log($"{nPlayer} entered {instance}");
         Request.SendBuffer(client, response, ResponseType.Enter, uid);
     }

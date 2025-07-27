@@ -10,9 +10,11 @@ public class Instance
     public uint MasterId;
     public InstanceFlags Flags;
     public ushort Capacity = 0;
-    public byte MaxTps = 24;
+    public byte Tps = 24;
+    public float Threshold = 0.001f;
     private List<UserModered> _modereds = [];
-    public World World;
+    public World? World;
+    public List<Player> Players = new();
 
     public UserModered? GetModered(uint userId, string address)
         => _modereds.FirstOrDefault(m => m.UserId == userId || m.Address == address);
@@ -43,9 +45,6 @@ public class Instance
     public bool VerifyPassword(string password) 
         => string.IsNullOrEmpty(Password) || (!string.IsNullOrEmpty(password) && Hashing.Verify(password, Password));
 
-    public Player[] Players
-        => PlayerManager.GetFromInstance(InternalId);
-
     public Instance()
     {
         Flags = InstanceFlags.None;
@@ -54,8 +53,13 @@ public class Instance
     }
 
     public override string ToString() 
-        => $"{GetType().Name}[InternalId={InternalId}, MasterId={MasterId}, PlayerCount={Players.Length}/{Capacity}]";
+        => $"{GetType().Name}[InternalId={InternalId}, MasterId={MasterId}, PlayerCount={Players.Count}/{Capacity}]";
 
-    public Player[] GetPlayers()
-        => _players.ToArray();
+    internal ushort GetNextPlayerId()
+    {
+        ushort id = 0;
+        while (Players.Exists(p => p.Id == id))
+            id++;
+        return id;
+    }
 }

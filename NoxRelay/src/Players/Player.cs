@@ -14,6 +14,9 @@ public class Player
     public DateTimeOffset CreatedAt = DateTimeOffset.Now;
     public PlayerFlags Flags = PlayerFlags.None;
 
+    public byte CustomTps = 0;
+    public float CustomThreshold = 0.0f;
+
     public PlayerTransform Transforms = new();
 
     public UserModered? Modered 
@@ -39,5 +42,6 @@ public class Player
     public Instance Instance 
         => InstanceManager.Get(InstanceId);
 
-    public override string ToString() => $"{GetType().Name}[Id={Id}, ClientId={ClientId}, InstanceId={InstanceId}, Status={Status}, Display={Display}]";
+    public override string ToString() 
+        => $"{GetType().Name}[Id={Id}, ClientId={ClientId}, InstanceId={InstanceId}, Status={Status}, Display={Display}]";
 }
