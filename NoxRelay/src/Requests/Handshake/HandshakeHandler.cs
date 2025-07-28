@@ -36,6 +36,7 @@ public class HandshakeHandler : Handler
             client.Status = ClientStatus.Handshaked;
 
         var response = new Buffer();
+        var config = Config.Load();
         response.Write(Constants.ProtocolVersion);
         response.Write(client.Id);
         response.Write(client.Status);
@@ -47,6 +48,8 @@ public class HandshakeHandler : Handler
         response.Write(flags);
         if(!flags.HasFlag(HandshakeFlags.IsOffline))
             response.Write(MasterServer.MasterAddress);
+        response.Write(Constants.MaxPacketSize);
+        response.Write(config.GetConnectionTimeout());
 
         Request.SendBuffer(client, response, ResponseType.Handshake, uid);
     }
