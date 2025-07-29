@@ -79,8 +79,8 @@ public class AuthHandler : Handler
                 };
                 buffer.Write(AuthResult.Success);
                 buffer.Write(client.User.Id);
-                buffer.Write(client.User.DisplayName);
                 buffer.Write(client.User.Address);
+                buffer.Write(client.User.DisplayName);
                 client.Status = ClientStatus.Authentificated;
                 Logger.Log($"{client} authentificated as {client.User.Id}@{client.User.Address}");
             }
