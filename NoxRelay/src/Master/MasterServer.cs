@@ -43,10 +43,19 @@ namespace Relay.Master
                 }
                 else if (!IsConnected)
                     await Task.Delay(NextUpdateTime);
+
                 LastUpdate = DateTime.Now;
-                await SendUpdate();
+
+                try
+                {
+                    await SendUpdate();
+                }
+                catch 
+                {
+                }
             }
         }
+        
 
         public async Task SendUpdate()
         {
