@@ -50,6 +50,7 @@ public class HandshakeHandler : Handler
             response.Write(MasterServer.MasterAddress);
         response.Write(Constants.MaxPacketSize);
         response.Write(config.GetConnectionTimeout());
+        response.Write(config.GetKeepAliveInterval());
 
         Request.SendBuffer(client, response, ResponseType.Handshake, uid);
     }

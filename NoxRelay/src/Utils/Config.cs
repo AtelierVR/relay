@@ -83,6 +83,15 @@ namespace Relay.Utils
                 : Constants.ConnectionTimeout
             );
 
+        public ushort GetKeepAliveInterval()
+            => Has("keep_alive_interval")
+            ? Get<ushort>("keep_alive_interval")
+            : (
+                HasEnv("keep_alive_interval")
+                ? GetFromEnv<ushort>("keep_alive_interval")
+                : Constants.KeepAliveInterval
+            );
+
         public string GetMasterGateway() => Get<string>("master_gateway") ?? GetFromEnv<string>("master_gateway") ?? Constants.MasterGateway;
 
         public string GetToken() => Get<string>("token") ?? GetFromEnv<string>("token") ?? "";
