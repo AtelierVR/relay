@@ -20,15 +20,20 @@ public class TravelingHandler : Handler
         var action = buffer.ReadEnum<TravelingAction>();
         var player = client.GetInstancePlayer(internalId);
         if (player is not { Status: > PlayerStatus.None }) return;
+        Logger.Debug($"{player} sent traveling action {action}");
 
-        if (action.HasFlag(TravelingAction.Travel))
+        if (action == TravelingAction.Travel)
+        {
             Travel(player, uid);
+            return;
+        }
 
         // others actions
 
         var response = new Buffer();
         response.Write(player.InstanceId);
         response.Write(TravelingResults.Unknown);
+        response.Write($"Action {action} is not supported yet");
         Request.SendBuffer(client, response, ResponseType.Traveling, uid);
     }
 
