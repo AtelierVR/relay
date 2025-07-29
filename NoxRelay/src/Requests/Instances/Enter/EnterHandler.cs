@@ -132,6 +132,14 @@ public class EnterHandler : Handler
         response.Write(nPlayer.CustomThreshold == 0 ? nPlayer.Instance.Threshold : nPlayer.CustomThreshold);
         Logger.Log($"{nPlayer} entered {instance}");
         Request.SendBuffer(client, response, ResponseType.Enter, uid);
+
+        for(var i = 0; i < instance.Players.Count; i++)
+        {
+            var p = instance.Players[i];
+            if (p == null || p.Id == nPlayer.Id) continue;
+            SendJoin(client, p);
+            SendJoin(p.Client, nPlayer);
+        }
     }
 
     public static void SendJoin(Client client, Player player, ushort uid = ushort.MinValue)
