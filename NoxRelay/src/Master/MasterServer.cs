@@ -50,12 +50,17 @@ namespace Relay.Master
                 {
                     await SendUpdate();
                 }
-                catch 
+                catch (Exception e)
                 {
+                    Logger.Warning("Failed to update master server");
+                    Logger.Exception(e);
+
+                    IsConnected = false;
+                    MasterAddress = "";
                 }
             }
         }
-        
+
 
         public async Task SendUpdate()
         {
