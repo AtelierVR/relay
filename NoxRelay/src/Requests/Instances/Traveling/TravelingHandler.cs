@@ -28,6 +28,11 @@ public class TravelingHandler : Handler
             return;
         }
 
+        if (action == TravelingAction.Ready)
+        {
+            Ready(player, uid);
+            return;
+        }
         // others actions
 
         var response = new Buffer();
@@ -39,12 +44,27 @@ public class TravelingHandler : Handler
 
     public void Travel(Player player, ushort uid = 0)
     {
-        if (player.Status == PlayerStatus.None) return;
+        var response = new Buffer();
+        response.Write(player.InstanceId);
+
+        if (player.Status == PlayerStatus.None)
+        {
+            response.Write(TravelingResults.Unknown);
+            response.Write("Player is not ready to travel");
+            Request.SendBuffer(player.Client, response, ResponseType.Traveling, uid);
+            return;
+        }
 
         var world = player.Instance.World;
 
-        var response = new Buffer();
-        response.Write(player.InstanceId);
+        if (world == null)
+        {
+            response.Write(TravelingResults.Unknown);
+            response.Write("World is not set for the instance");
+            Request.SendBuffer(player.Client, response, ResponseType.Traveling, uid);
+            return;
+        }
+
         response.Write(TravelingResults.UseMaster);
         response.Write(world.MasterId);
         response.Write(world.Address);
@@ -54,6 +74,25 @@ public class TravelingHandler : Handler
 
         player.Status = PlayerStatus.Traveling;
 
+        MasterServer.UpdateImediately();
+    }
+
+    public void Ready(Player player, ushort uid = 0)
+    {
+        var response = new Buffer();
+        response.Write(player.InstanceId);
+        if (player.Status != PlayerStatus.Traveling)
+        {
+            response.Write(TravelingResults.Unknown);
+            response.Write("Player is not traveling");
+            Request.SendBuffer(player.Client, response, ResponseType.Traveling, uid);
+            return;
+        }
+
+        player.Status = PlayerStatus.Ready;
+
+        response.Write(TravelingResults.Ready);
+        Request.SendBuffer(player.Client, response, ResponseType.Traveling, uid);
         MasterServer.UpdateImediately();
     }
 }
