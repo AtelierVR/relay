@@ -7,7 +7,18 @@ public class PlayerTransform
 {
     Dictionary<ushort, Transform> transforms = new();
 
-    public Dictionary<ushort, Transform> GetPairs() => transforms;
-    public void Set(ushort part, Transform transform) => transforms[part] = transform;
-    public Transform Get(ushort part) => transforms.TryGetValue(part, out Transform? transform) ? transform : new();
+    public Dictionary<ushort, Transform> GetPairs() 
+        => transforms;
+
+    public void Set(ushort part, Transform transform)
+        => transforms[part] = transform;
+
+    public Transform Get(ushort part) 
+        => transforms.TryGetValue(part, out Transform? transform) ? transform : new();
+
+    public void Remove(ushort part)
+    {
+        if (transforms.ContainsKey(part))
+            transforms.Remove(part);
+    }
 }
