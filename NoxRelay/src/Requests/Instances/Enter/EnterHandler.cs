@@ -6,6 +6,7 @@ using Relay.Instances;
 using Relay.Master;
 using Relay.Players;
 using Relay.Requests.Instances.Quit;
+using Relay.Requests.Instances.Transform;
 using Relay.Requests.Instances.Traveling;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;
@@ -155,5 +156,11 @@ public class EnterHandler : Handler
         response.Write(player.Client.Engine);
         response.Write(player.Client.Platform);
         Request.SendBuffer(client, response, ResponseType.Join, uid);
+
+        foreach (var (part, tr) in player.Transforms.GetPairs())
+        {
+            if (tr.flags == TransformFlags.None) continue;
+            TransformHandler.SendTransform(client, player.InstanceId, player.Id, part, tr);
+        }
     }
 }
