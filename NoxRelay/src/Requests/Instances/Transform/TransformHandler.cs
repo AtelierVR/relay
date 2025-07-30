@@ -79,7 +79,7 @@ internal class TransformHandler : Handler
         }
     }
 
-    public static void SendTransform(Client client, ushort instanceId, ushort playerId, ushort playerRig, Utils.Transform transform, ushort uid = ushort.MinValue)
+    public static void SendTransform(Client client, byte instanceId, ushort playerId, ushort playerRig, Utils.Transform transform, ushort uid = ushort.MinValue)
     {
         var response = new Buffer();
         response.Write(instanceId);
