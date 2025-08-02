@@ -5,19 +5,37 @@ namespace Relay.Players;
 [Flags]
 public enum PlayerFlags : uint
 {
-    None              = 0,
-    IsBot             = 1 << 0,
-    InstanceMaster    = 1 << 1,
-    InstanceModerator = 1 << 2,
-    InstanceOwner     = 1 << 3,
-    GuildModerator    = 1 << 4,
-    MasterModerator   = 1 << 5,
-    WorldOwner        = 1 << 6,
-    WorldModerator    = 1 << 7,
-    AuthUnverified    = 1 << 8,
-    HideInList        = 1 << 9,
-    Dimension         = 1 << 10,
+    None = 0,
 
-    IsOwner = InstanceOwner | WorldOwner,
-    IsModerator = InstanceModerator | GuildModerator | MasterModerator | WorldModerator
+    // Indiquate if the player is a bot
+    IsBot = 1 << 0, 
+
+    // Player is the reference player for the instance
+    InstanceMaster = 1 << 1,
+
+    // Is the manual added moderator of the instance
+    InstanceModerator = 1 << 2,
+
+    // Is the creator of the instance
+    InstanceOwner = 1 << 3,
+
+    // Player is a moderator in the guild who owns the instance
+    GuildModerator = 1 << 4,
+
+    // Player is ta moderator in the master node who owns the instance
+    MasterModerator = 1 << 5,
+
+    // Player is the owner of the world
+    WorldOwner = 1 << 6,
+
+    // Player is a moderator in the world
+    WorldModerator = 1 << 7,
+
+    // Player is authenticated and verified
+    AuthUnverified = 1 << 8,
+
+    // Player is hidden in motded lists
+    HideInList = 1 << 9,
+    
+    HasPrivilege = InstanceMaster | InstanceModerator | InstanceOwner | GuildModerator | MasterModerator | WorldOwner | WorldModerator,
 }

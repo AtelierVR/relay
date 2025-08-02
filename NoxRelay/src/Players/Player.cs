@@ -24,10 +24,8 @@ public class Player
         ? Instance.GetModered(Client.User) 
         : null;
 
-    public bool IsModerator
-        => (Flags & PlayerFlags.IsModerator) != 0
-        || (Flags & PlayerFlags.IsOwner) != 0
-        || Modered?.IsModerator == true;
+    public bool HasPrivilege 
+        => Flags.HasFlag(PlayerFlags.HasPrivilege);
 
     public string Display
     {
