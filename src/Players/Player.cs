@@ -1,4 +1,5 @@
 ﻿using System;
+using Relay.Avatars;
 using Relay.Clients;
 using Relay.Instances;
 
@@ -13,6 +14,7 @@ public class Player
     private string? _display;
     public DateTimeOffset CreatedAt = DateTimeOffset.Now;
     public PlayerFlags Flags = PlayerFlags.None;
+    public Avatar? avatar = null;
 
     public byte CustomTps = 0;
     public float CustomThreshold = 0.0f;

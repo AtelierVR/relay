@@ -54,10 +54,11 @@ namespace Relay.Clients
 
         public void OnReceive(Buffer buffer)
         {
-            Logger.Debug($"{this} received {buffer}");
+            // Logger.Debug($"{this} received {buffer}");
         }
 
-        public override string ToString() => $"{GetType().Name}[Id={Id}, Remote={Remote}, Status={Status}]";
+        public override string ToString() 
+            => $"{GetType().Name}[Id={Id}, Remote={Remote}, Status={Status}]";
 
         public void OnTimeout()
         {

@@ -5,6 +5,7 @@ using Relay.Clients;
 using Relay.Instances;
 using Relay.Master;
 using Relay.Players;
+using Relay.Requests.Instances.Avatar;
 using Relay.Requests.Instances.Quit;
 using Relay.Requests.Instances.Transform;
 using Relay.Requests.Instances.Traveling;
@@ -150,12 +151,19 @@ public class EnterHandler : Handler
         response.Write(player.Flags);
         response.Write(player.Id);
         response.Write(player.Client.User?.Id ?? 0);
-        response.Write(player.Client.User?.Address ?? "");
+        response.Write(player.Client.User?.Address ?? string.Empty);
         response.Write(player.Display);
         response.Write(player.CreatedAt);
         response.Write(player.Client.Engine);
         response.Write(player.Client.Platform);
         Request.SendBuffer(client, response, ResponseType.Join, uid);
+        Logger.Debug($"Sent join of {player} to {client}");
+
+        if (player.avatar != null)
+        {
+            Logger.Debug($"{client} is being sent avatar {player.avatar} for {player}");
+            AvatarChangedHandler.SendAvatarChanged(client, player.InstanceId, player.Id, player.avatar);
+        }
 
         foreach (var (part, tr) in player.Transforms.GetPairs())
         {

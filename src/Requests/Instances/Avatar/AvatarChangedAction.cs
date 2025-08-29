@@ -1,8 +1,8 @@
 namespace Relay.Requests.Instances.Avatar;
 
-enum AvatarChangedAction : byte
+public enum AvatarChangedAction : byte
 {
-    Changing = 0,
     Ready = 1,
-    Failed = 2
+    Failed = 2,
+    Change = 3
 }

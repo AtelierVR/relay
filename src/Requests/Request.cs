@@ -57,13 +57,9 @@ namespace Relay.Requests
             buffer.Goto(0);
             buffer.Write(buffer.length);
             
-            // Check if packet needs to be fragmented
             if (buffer.length > Constants.MaxPacketSize)
-            {
                 return SendLargeBuffer(client, data.ToBuffer(), type, uid);
-            }
             
-            Logger.Debug($"Sending {type} buffer (length={buffer.length}, uid={uid:X4}) to {client}: {buffer}");
             return client.Remote.Send(buffer.ToBuffer(), buffer.length) ? uid : ushort.MaxValue;
         }
 

@@ -15,8 +15,6 @@ public class LantencyHandler : Handler
         var uid = buffer.ReadUShort();
         var type = buffer.ReadEnum<RequestType>();
         if (type != RequestType.Latency) return;
-        Logger.Debug($"{client} sent latency");
-
         var initial = buffer.ReadDateTime();
         var response = new Buffer();
         response.Write(initial);
