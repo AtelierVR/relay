@@ -4,6 +4,7 @@
     {
         public const ushort ProtocolVersion = 1;
         public const ushort MaxPacketSize = 1024;
+        public const ushort MaxFragmentSize = 1000; // Leave room for multipacket headers
         public const ushort Port = 23032;
         public const string UseAddress = "127.0.0.1:23032";
         public const string MasterGateway = "http://127.0.0.1:53032";
@@ -29,6 +30,9 @@
         Traveling = 0x09,
         Transform = 0x0C,
         Teleport = 0x0D,
+        MultiPacketStart = 0x0F,
+        MultiPacketData = 0x10,
+        MultiPacketEnd = 0x11,
         None = 0xFF
     }
 
@@ -46,7 +50,11 @@
         Join = 0x0A,
         Leave = 0x0B,
         Transform = 0x0C,
-        Teleport = 0x0D
+        Teleport = 0x0D,
+        MultiPacketStart = 0x0F,
+        MultiPacketData = 0x10,
+        MultiPacketEnd = 0x11,
+        None = 0xFF
     }
 
     public enum Platfrom : byte

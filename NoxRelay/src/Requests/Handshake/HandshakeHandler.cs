@@ -15,7 +15,7 @@ public class HandshakeHandler : Handler
         var uid = buffer.ReadUShort();
         var type = buffer.ReadEnum<RequestType>();
         if (type != RequestType.Handshake) return;
-        Logger.Debug($"{client} sent handshake");
+        Logger.Debug($"{client} sent handshake with uid={uid:X4}");
 
         var protocol = buffer.ReadUShort();
         var engine = buffer.ReadString();
@@ -37,10 +37,23 @@ public class HandshakeHandler : Handler
 
         var response = new Buffer();
         var config = Config.Load();
+        
+        Logger.Debug($"Creating handshake response for {client}");
+        
         response.Write(Constants.ProtocolVersion);
         response.Write(client.Id);
         response.Write(client.Status);
-        response.Write(client.Remote.Address.GetAddressBytes());
+        
+        try 
+        {
+            response.Write(client.Remote.Address.GetAddressBytes());
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Failed to write address bytes: {ex.Message}");
+            response.Write(new byte[] { 0, 0, 0, 0 }); // Fallback
+        }
+        
         response.Write(client.Remote.Port);
         HandshakeFlags flags = HandshakeFlags.None;
         if (string.IsNullOrEmpty(MasterServer.MasterAddress))
@@ -52,6 +65,8 @@ public class HandshakeHandler : Handler
         response.Write(config.GetConnectionTimeout());
         response.Write(config.GetKeepAliveInterval());
 
+        Logger.Debug($"Handshake response buffer length: {response.length}");
+        Logger.Debug($"Sending handshake response with uid={uid:X4}");
         Request.SendBuffer(client, response, ResponseType.Handshake, uid);
     }
 }

@@ -43,7 +43,7 @@ namespace Relay.Requests.Instances.Quit
                 foreach (var other in ins.Players.Where(other => other.Id != player.Id))
                 {
                     if (other is not { Status: PlayerStatus.Ready }) continue;
-                    var allMessage = other.IsModerator
+                    var allMessage = other.HasPrivilege
                         || by is not null && by.Id == other.Id;
 
                     // broadcast leave event to other players of the player

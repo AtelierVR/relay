@@ -31,7 +31,7 @@ internal class TransformHandler : Handler
                 if (op_player is not { Status: PlayerStatus.Ready }) return;
                 var isSelf = op_player.Client == client;
 
-                if (!isSelf && !player.IsModerator)
+                if (!isSelf && !player.HasPrivilege)
                 {
                     // only moderators can transform other players
                     Logger.Warning($"{player} tried to transform {op_player}");
