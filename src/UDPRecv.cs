@@ -7,30 +7,26 @@ using Buffer = Relay.Utils.Buffer;
 
 namespace Relay
 {
-    public class UdpRecv
+    public static class UdpRecv
     {
-        private static UdpClient _udpServer;
-
-        public UdpRecv()
-        {
-            var config = Config.Load();
-            _udpServer = new UdpClient(config.GetPort());
-        }
+        private static UdpClient? _udpServer;
 
         public static void Start()
         {
             var config = Config.Load();
+            _udpServer = new UdpClient(config.GetPort());
             var remoteEp = new IPEndPoint(IPAddress.Any, config.GetPort());
             Logger.Log($"UDP Server started on port {config.GetPort()}");
             while (true)
                 try
                 {
                     var data = _udpServer.Receive(ref remoteEp);
-                    var buffer = new Buffer();
+                    var buffer = BufferPool.Instance.Rent();
                     buffer.Write(data);
                     buffer.Goto(0);
                     buffer.length = (ushort)data.Length;
                     Request.OnBuffer(new UdpRemote(remoteEp, _udpServer), buffer);
+                    BufferPool.Instance.Return(buffer);
                 }
                 catch (Exception e)
                 {
@@ -50,8 +46,11 @@ namespace Relay
             _server = server;
         }
 
-        public override IPAddress Address => _client.Address;
-        public override ushort Port => (ushort)_client.Port;
+        public override IPAddress Address
+            => _client.Address;
+
+        public override ushort Port
+            => (ushort)_client.Port;
 
         public override bool Send(byte[] data, int length)
         {
@@ -59,7 +58,7 @@ namespace Relay
             return true;
         }
 
-        public override bool Equals(IRemote obj) =>
-            obj is UdpRemote remote && remote.Address.Equals(Address) && remote.Port == Port;
+        public override bool Equals(IRemote obj)
+            => obj is UdpRemote remote && remote.Address.Equals(Address) && remote.Port == Port;
     }
 }

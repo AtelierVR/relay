@@ -6,7 +6,8 @@ namespace Relay.Utils
     public class Handler
     {
         public static List<Handler> Handlers = new List<Handler>();
-        public static T Get<T>() where T : Handler => Handlers.Find(handler => handler is T) as T;
+        public static T? Get<T>() where T : Handler
+            => Handlers.Find(handler => handler is T) as T;
 
         public Handler()
         {

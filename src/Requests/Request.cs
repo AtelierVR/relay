@@ -6,14 +6,14 @@ using Buffer = Relay.Utils.Buffer;
 
 namespace Relay.Requests
 {
-    public class Request
+    public static class Request
     {
         public static void OnBuffer(IRemote remote, Buffer buffer)
         {
             var client = ClientManager.Get(remote);
             if (client == null)
             {
-                client = new Client { Remote = remote };
+                client = new Client(remote);
                 client.OnConnect();
             }
             client.LastSeen = DateTimeOffset.UtcNow;

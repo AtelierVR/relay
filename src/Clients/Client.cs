@@ -34,10 +34,11 @@ namespace Relay.Clients
             return instance.Players.FirstOrDefault(player => player.ClientId == Id);
         }
 
-        public Client()
+        public Client(IRemote remote)
         {
             Id = ClientManager.NextId();
             ClientManager.Add(this);
+            Remote = remote;
         }
 
         public void OnConnect()
@@ -48,8 +49,8 @@ namespace Relay.Clients
         public void OnDisconnect(string reason)
         {
             foreach (var player in GetPlayers())
-                Handler.Get<QuitHandler>().LeavePlayer(player, QuitType.Normal, null, player);
-            Logger.Log($"{this} disconnected");
+                QuitHandler.LeavePlayer(player, QuitType.Normal, null, player);
+            Logger.Log($"{this} disconnected - {reason ?? "normal"}");
         }
 
         public void OnReceive(Buffer buffer)
@@ -57,15 +58,15 @@ namespace Relay.Clients
             // Logger.Debug($"{this} received {buffer}");
         }
 
-        public override string ToString() 
+        public override string ToString()
             => $"{GetType().Name}[Id={Id}, Remote={Remote}, Status={Status}]";
 
         public void OnTimeout()
         {
             Logger.Warning($"{this} timed out");
-            foreach(var player in GetPlayers())
-                Handler.Get<QuitHandler>().LeavePlayer(player, QuitType.Timeout, null, player);
-            Handler.Get<DisconnectHandler>().SendEvent(this, Messages.ConnectionTimeout);
+            foreach (var player in GetPlayers())
+                QuitHandler.LeavePlayer(player, QuitType.Timeout, null, player);
+            DisconnectHandler.SendEvent(this, Messages.ConnectionTimeout);
             ClientManager.Remove(this);
         }
     }

@@ -1,29 +1,27 @@
-﻿using System.Threading;
-using Relay.Master;
+﻿using Relay.Master;
 using Relay.Requests;
 using Relay.Utils;
+using Relay.LoadBalancing;
 
 namespace Relay
 {
     internal class MainProcess
     {
-        static UdpRecv _udpRecv;
-        static MasterServer _master;
-        static TCPRecv _tcpRecv;
-        static Request _netRecv;
-
         public static void Main(string[] args)
         {
             Logger.Log("Starting NoxRelay...");
             if (Logger.PrintDebug)
                 Logger.Warning("Debug mode enabled");
 
-            // Starting the server
-            _netRecv = new Request();
-            _udpRecv = new UdpRecv();
-            _tcpRecv = new TCPRecv();
-            _master = new MasterServer();
+            // Initialize BufferPool
+            BufferPool.Instance.Preload(100);
+            Logger.Log("BufferPool initialized and preloaded");
 
+            // Initialize LoadBalancer
+            var loadBalancerManager = LoadBalancerManager.Instance;
+            Logger.Log("LoadBalancer initialized");
+
+            // Starting the server
             Handler.Listing();
 
             var thread1 = new Thread(WorkerUdpRecv);
@@ -37,6 +35,8 @@ namespace Relay
             thread3.Start();
             thread4.Start();
 
+            Logger.Log("All worker threads started");
+
             // Waiting for the threads to finish
             thread1.Join();
             thread2.Join();
@@ -44,9 +44,16 @@ namespace Relay
             thread4.Join();
         }
 
-        static void WorkerUdpRecv() => UdpRecv.Start();
-        static void WorkerNetCheck() => Request.Check();
-        static void WorkerMaster() => _master.Start();
-        static void WorkerTcpRecv() => _tcpRecv.Start();
+        static void WorkerUdpRecv()
+            => UdpRecv.Start();
+
+        static void WorkerNetCheck()
+            => Request.Check();
+
+        static void WorkerMaster()
+            => MasterServer.Start();
+
+        static void WorkerTcpRecv()
+            => TCPRecv.Start();
     }
 }

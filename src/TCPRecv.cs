@@ -8,21 +8,16 @@ using Buffer = Relay.Utils.Buffer;
 
 namespace Relay
 {
-    public class TCPRecv
+    public static class TCPRecv
     {
         // tcp server
-        private static TcpListener _tcpServer;
+        private static TcpListener? _tcpServer;
 
-        public TCPRecv()
+        public static void Start()
         {
             var config = Config.Load();
             _tcpServer = new TcpListener(IPAddress.Any, config.GetPort());
-        }
-
-        public void Start()
-        {
             _tcpServer.Start();
-            var config = Config.Load();
             Logger.Log($"TCP Server started on port {config.GetPort()}");
             while (true)
             {
@@ -41,11 +36,12 @@ namespace Relay
                 {
                     var read = clientRemote.GetStream().Read(data, 0, data.Length);
                     if (read == 0) break;
-                    var buffer = new Buffer();
+                    var buffer = BufferPool.Instance.Rent();
                     buffer.Write(data);
                     buffer.Goto(0);
                     buffer.length = (ushort)read;
                     Request.OnBuffer(clientRemote, buffer);
+                    BufferPool.Instance.Return(buffer);
                 }
                 catch (Exception e)
                 {
@@ -68,8 +64,10 @@ namespace Relay
 
         public NetworkStream GetStream() => _stream;
 
-        public override IPAddress Address => ((IPEndPoint)_remote.Client.RemoteEndPoint).Address;
-        public override ushort Port => (ushort)((IPEndPoint)_remote.Client.RemoteEndPoint).Port;
+        public override IPAddress Address
+            => ((IPEndPoint)_remote.Client.RemoteEndPoint).Address;
+        public override ushort Port
+            => (ushort)((IPEndPoint)_remote.Client.RemoteEndPoint).Port;
 
         public override bool Send(byte[] data, int length)
         {

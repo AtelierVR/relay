@@ -18,7 +18,7 @@ public class DisconnectHandler : Handler
         SendEvent(client, "Good Bye!");
     }
 
-    public void SendEvent(Client client, string reason)
+    public static void SendEvent(Client client, string reason)
     {
         if (client.Status == ClientStatus.Disconnected) return;
         var buffer = new Buffer();

@@ -23,9 +23,7 @@ public class HandshakeHandler : Handler
 
         if (protocol != Constants.ProtocolVersion)
         {
-            Get<DisconnectHandler>().SendEvent(client,
-                string.Format(Messages.IncompatibleProtocol, protocol, Constants.ProtocolVersion)
-            );
+            DisconnectHandler.SendEvent(client, string.Format(Messages.IncompatibleProtocol, protocol, Constants.ProtocolVersion));
             return;
         }
 
@@ -37,14 +35,14 @@ public class HandshakeHandler : Handler
 
         var response = new Buffer();
         var config = Config.Load();
-        
+
         Logger.Debug($"Creating handshake response for {client}");
-        
+
         response.Write(Constants.ProtocolVersion);
         response.Write(client.Id);
         response.Write(client.Status);
-        
-        try 
+
+        try
         {
             response.Write(client.Remote.Address.GetAddressBytes());
         }
@@ -53,13 +51,13 @@ public class HandshakeHandler : Handler
             Logger.Error($"Failed to write address bytes: {ex.Message}");
             response.Write(new byte[] { 0, 0, 0, 0 }); // Fallback
         }
-        
+
         response.Write(client.Remote.Port);
         HandshakeFlags flags = HandshakeFlags.None;
         if (string.IsNullOrEmpty(MasterServer.MasterAddress))
             flags |= HandshakeFlags.IsOffline;
         response.Write(flags);
-        if(!flags.HasFlag(HandshakeFlags.IsOffline))
+        if (!flags.HasFlag(HandshakeFlags.IsOffline))
             response.Write(MasterServer.MasterAddress);
         response.Write(Constants.MaxPacketSize);
         response.Write(config.GetConnectionTimeout());

@@ -8,10 +8,10 @@ using System.Diagnostics;
 
 namespace Relay.Master
 {
-    public class MasterServer
+    public static class MasterServer
     {
-        public static string ServerAddress;
-        public static string ServerGateway;
+        public static string ServerAddress = "";
+        public static string ServerGateway = "";
         private static string _token = "";
         private static byte _maxInstances;
         public static bool IsConnected { get; private set; } = false;
@@ -22,7 +22,7 @@ namespace Relay.Master
         public static void UpdateImediately() => LastUpdate = DateTime.MinValue;
 
 
-        public async void Start()
+        public static async void Start()
         {
             var config = Config.Load();
             ServerGateway = config.GetMasterGateway();
@@ -62,7 +62,7 @@ namespace Relay.Master
         }
 
 
-        public async Task SendUpdate()
+        public static async Task SendUpdate()
         {
             var clients = ClientManager.Clients.ToArray().Select(client => new RequestClient
             {
@@ -171,7 +171,7 @@ namespace Relay.Master
             return;
         }
 
-        public static async Task<MasterResponse<T>> Request<T, TR>(string path, HttpMethod method, TR data = default)
+        public static async Task<MasterResponse<T>> Request<T, TR>(string path, HttpMethod method, TR? data = default)
         {
             try
             {
@@ -189,9 +189,10 @@ namespace Relay.Master
                 }
                 var response = await client.SendAsync(request);
                 var responseString = await response.Content.ReadAsStringAsync();
-                return JObject
-                    .Parse(responseString)
-                    .ToObject<MasterResponse<T>>();
+                return JObject.Parse(responseString).ToObject<MasterResponse<T>>() ?? new MasterResponse<T>()
+                {
+                    error = new MasterResponseError() { message = "Invalid response from master server", code = 0, status = 500 }
+                };
             }
             catch (Exception e)
             {

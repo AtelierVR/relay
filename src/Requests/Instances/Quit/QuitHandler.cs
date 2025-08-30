@@ -27,7 +27,7 @@ namespace Relay.Requests.Instances.Quit
             LeavePlayer(player, action, reason, player, uid);
         }
 
-        public void LeavePlayer(Player player, QuitType type, string? reason = null, Player? by = null, ushort uid = 0)
+        public static void LeavePlayer(Player player, QuitType type, string? reason = null, Player? by = null, ushort uid = 0)
         {
             if (player.Status == PlayerStatus.None) return;
             if (type == QuitType.ModerationKick && (by?.Modered is null || !by.Modered.IsModerator)) return;
