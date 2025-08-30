@@ -20,8 +20,6 @@ internal class TransformHandler : Handler
         if (player is not { Status: PlayerStatus.Ready }) return;
 
         var tr_type = buffer.ReadEnum<TransformType>();
-
-        Logger.Debug($"{client} sent transform {tr_type}");
         switch (tr_type)
         {
             case TransformType.OnPlayer:
@@ -66,7 +64,6 @@ internal class TransformHandler : Handler
                 op_transform.flags &= ~TransformFlags.Reset;
                 op_player.Transforms.Set(op_player_rig, op_transform);
 
-                Logger.Debug($"{player} transformed {op_player} to {(PlayerRig)op_player_rig}");
                 break;
             case TransformType.ByPath:
                 var bp_path = buffer.ReadString();
