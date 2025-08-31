@@ -3,71 +3,71 @@ using Relay.Players;
 using Relay.Requests.Disconnect;
 using Relay.Requests.Instances.Quit;
 using Relay.Utils;
-using Buffer = Relay.Utils.Buffer;
 
-namespace Relay.Clients
-{
-    public class Client
-    {
-        public ushort Id;
-        public IRemote Remote;
-        public ClientStatus Status;
-        public string Platform = "";
-        public string Engine = "";
-        public DateTimeOffset LastSeen = DateTimeOffset.MinValue;
-        public User? User = null;
+namespace Relay.Clients;
 
-        public List<Player> GetPlayers()
-        {
-            List<Player> players = new();
-            foreach (var instance in InstanceManager.Instances)
-                foreach (var player in instance.Players)
-                    if (player.ClientId == Id)
-                        players.Add(player);
-            return players;
-        }
+public class Client {
+	public ushort         Id = ushort.MaxValue;
+	public Remote         Remote;
+	public string         Platform = string.Empty;
+	public string         Engine   = string.Empty;
+	public DateTimeOffset LastSeen = DateTimeOffset.MinValue;
+	public User?          User     = null;
 
-        public Player? GetInstancePlayer(byte instanceId)
-        {
-            var instance = InstanceManager.Get(instanceId);
-            if (instance == null) return null;
-            return instance.Players.FirstOrDefault(player => player.ClientId == Id);
-        }
+	public bool TryGetUser(out User user) {
+		if (User is { Id: > Clients.User.InvalidId } u) {
+			user = u;
+			return true;
+		}
 
-        public Client(IRemote remote)
-        {
-            Id = ClientManager.NextId();
-            ClientManager.Add(this);
-            Remote = remote;
-        }
+		user = default;
+		return false;
+	}
 
-        public void OnConnect()
-        {
-            Logger.Log($"{this} connected");
-        }
+	public bool IsAuthenticated
+		=> User is { Id: > Clients.User.InvalidId };
 
-        public void OnDisconnect(string reason)
-        {
-            foreach (var player in GetPlayers())
-                QuitHandler.LeavePlayer(player, QuitType.Normal, null, player);
-            Logger.Log($"{this} disconnected - {reason ?? "normal"}");
-        }
+	public bool IsAuthenticating
+		=> User is { Id: Clients.User.InvalidId };
 
-        public void OnReceive(Buffer buffer)
-        {
-            // Logger.Debug($"{this} received {buffer}");
-        }
+	public bool IsHandshake = false;
 
-        public override string ToString()
-            => $"{GetType().Name}[Id={Id}, Remote={Remote}, Status={Status}]";
+	public List<Player> GetPlayers() {
+		List<Player> players = [];
+		foreach (var instance in InstanceManager.Instances)
+			players.AddRange(instance.Players.Where(player => player.ClientId == Id));
+		return players;
+	}
 
-        public void OnTimeout()
-        {
-            Logger.Warning($"{this} timed out");
-            foreach (var player in GetPlayers())
-                QuitHandler.LeavePlayer(player, QuitType.Timeout, null, player);
-            DisconnectHandler.SendEvent(this, Messages.ConnectionTimeout);
-            ClientManager.Remove(this);
-        }
-    }
+	public Player? GetInstancePlayer(byte instanceId) {
+		var instance = InstanceManager.Get(instanceId);
+		return instance?.Players.FirstOrDefault(player => player.ClientId == Id);
+	}
+
+	public Client(Remote remote) {
+		Id = ClientManager.NextId();
+		ClientManager.Add(this);
+		Remote = remote;
+	}
+
+	public void OnConnect() {
+		Logger.Log($"{this} connected");
+	}
+
+	public void OnDisconnect(string? reason) {
+		foreach (var player in GetPlayers())
+			QuitHandler.LeavePlayer(player, QuitType.Normal, player.HasPrivilege ? reason : null, player);
+		Logger.Log($"{this} disconnected{(reason != null ? " - " + reason : string.Empty)}");
+		ClientManager.Remove(this);
+	}
+
+	public void OnTimeout() {
+		foreach (var player in GetPlayers())
+			QuitHandler.LeavePlayer(player, QuitType.Timeout, null, player);
+		DisconnectHandler.SendEvent(this, Messages.ConnectionTimeout);
+		ClientManager.Remove(this);
+	}
+
+	public override string ToString()
+		=> $"{GetType().Name}[Id={Id}, Remote={Remote}]";
 }

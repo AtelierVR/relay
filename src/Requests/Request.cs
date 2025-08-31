@@ -1,139 +1,202 @@
-﻿using System;
-using System.Threading.Tasks;
-using Relay.Clients;
+﻿using Relay.Clients;
+using Relay.Packets;
+using Relay.Priority;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;
 
-namespace Relay.Requests
+namespace Relay.Requests;
+
+public static class Request
 {
-    public static class Request
+    #region OnBuffer Interfaces
+
+    private static readonly PriorityQueue<ReceivePacket> ReceiveQueue = new(Comparer<ReceivePacket>.Default, maxSize: 50000);
+
+    public static void OnBuffer(Client client, Buffer buffer)
+        => OnBuffer(client.Remote, buffer.ToBuffer());
+
+    public static void OnBuffer(Remote remote, Buffer buffer)
+        => OnBuffer(remote, buffer.ToBuffer());
+
+    public static void OnBuffer(Client client, byte[] buffer)
+        => OnBuffer(client.Remote, buffer);
+
+    public static void OnBuffer(Remote remote, byte[] buf)
     {
-        public static void OnBuffer(IRemote remote, Buffer buffer)
+        if (buf.Length < 5) return;
+        var typ = (RequestType)buf[4];
+        var pry = PacketPriorityManager.GetPriority(typ);
+        var tsk = new ReceivePacket(remote, typ, buf, pry);
+        ReceiveQueue.TryEnqueue(tsk);
+    }
+
+    #endregion
+
+    #region SendBuffer Interfaces
+
+    private static readonly PriorityQueue<EmitterPacket> EmitterQueue = new(Comparer<EmitterPacket>.Default, maxSize: 50000);
+
+    public static void SendBuffer(Client client, Buffer buffer, ResponseType type, ushort uid = 0, EPriority priority = EPriority.Normal)
+        => SendBuffer(client.Remote, buffer.ToBuffer(), type, uid, priority);
+
+    public static void SendBuffer(Remote remote, Buffer buffer, ResponseType type, ushort uid = 0, EPriority priority = EPriority.Normal)
+        => SendBuffer(remote, buffer.ToBuffer(), type, uid, priority);
+
+    public static void SendBuffer(Client client, byte[] buffer, ResponseType type, ushort uid = 0, EPriority priority = EPriority.Normal)
+        => SendBuffer(client.Remote, buffer, type, uid, priority);
+
+    public static void SendBuffer(Remote remote, byte[] buffer, ResponseType type, ushort uid = 0, EPriority priority = EPriority.Normal)
+    {
+        var buf = Buffer.New(Math.Max(buffer.Length, Constants.MaxPacketSize));
+        buf.Write((ushort)(buffer.Length + 5));
+        buf.Write(uid);
+        buf.Write(type);
+        buf.Write(buffer);
+        var tsk = new EmitterPacket(remote, buf.ToBuffer(), priority);
+        EmitterQueue.TryEnqueue(tsk);
+    }
+
+    #endregion
+
+    #region Handler Loops
+
+    private static CancellationTokenSource? _cts;
+
+    public static void Start()
+    {
+        Logger.Debug("[Request] Starting request handler...");
+
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
+
+        Task.Run(
+            async () =>
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        Emit();
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error($"[Request.Emit] {ex}");
+                    }
+
+                    await Task.Delay(1, token);
+                }
+
+                Logger.Debug("[Request] Stopped emitting.");
+            }, token
+        );
+
+        Task.Run(
+            async () =>
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        Receive();
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error($"[Request.Receive] {ex}");
+                    }
+
+                    await Task.Delay(1, token);
+                }
+
+                Logger.Debug("[Request] Stopped receiving.");
+            }, token
+        );
+
+        Task.Run(
+            async () =>
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    Timeout();
+                    await Task.Delay(1000, token);
+                }
+
+                Logger.Debug("[Request] Stopped timing out.");
+            }, token
+        );
+    }
+
+    public static void Stop()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
+    }
+
+
+    private static void Emit()
+    {
+        var t0 = DateTime.UtcNow;
+        while (true)
         {
-            var client = ClientManager.Get(remote);
+            if (!EmitterQueue.TryDequeue(out var tsk)) break;
+            if ((DateTime.UtcNow - t0).TotalMilliseconds > Constants.MaxEmitTimeMs)
+            {
+                Logger.Warning("Emitter queue is too long, dropping packets...");
+                ReceiveQueue.Clear();
+                break;
+            }
+
+            tsk.Remote.Send(tsk.Buffer, tsk.Buffer.Length);
+        }
+    }
+
+    private static void Receive()
+    {
+        var t0 = DateTime.UtcNow;
+        while (true)
+        {
+            if (!ReceiveQueue.TryDequeue(out var tsk)) break;
+            if ((DateTime.UtcNow - t0).TotalMilliseconds > Constants.MaxReceiveTimeMs)
+            {
+                Logger.Warning("Receive queue is too long, dropping packets...");
+                ReceiveQueue.Clear();
+                break;
+            }
+
+            var client = ClientManager.Get(tsk.Remote);
             if (client == null)
             {
-                client = new Client(remote);
+                client = new Client(tsk.Remote);
                 client.OnConnect();
             }
-            client.LastSeen = DateTimeOffset.UtcNow;
 
-            client.OnReceive(buffer);
-            buffer.Goto(0);
-            var length = buffer.ReadUShort();
+            client.LastSeen = DateTime.UtcNow;
 
-            if (buffer.length < 5 || buffer.length < length)
+            var handlers = PacketDispatcher.GetHandlers(tsk.Type);
+            if (handlers.Length == 0) continue;
+
+            var buf = new Buffer(tsk.Payload);
+            var len = buf.ReadUShort();
+            var uid = buf.ReadUShort();
+            var typ = buf.ReadEnum<RequestType>();
+
+            var data = new PacketData(len, uid, typ, buf, client);
+
+            foreach (var handler in handlers)
             {
-                Logger.Warning($"{client} sent invalid buffer");
-                return;
-            }
-
-            // Check if this is a multipacket
-            buffer.Goto(4); // Skip length and uid
-            var requestType = buffer.ReadEnum<RequestType>();
-            
-            if (requestType == RequestType.MultiPacketStart || 
-                requestType == RequestType.MultiPacketData || 
-                requestType == RequestType.MultiPacketEnd)
-            {
-                // Handle multipacket directly
-                buffer.Goto(0);
-                var multiPacketHandler = new Requests.MultiPacket.MultiPacketHandler();
-                multiPacketHandler.OnReceive(buffer, client);
-                return;
-            }
-
-            buffer.Goto(0);
-            foreach (var handler in Handler.Handlers)
-                handler.OnReceive(buffer, client);
-        }
-
-        public static ushort SendBuffer(Client client, Buffer data, ResponseType type, ushort uid = 0x0000)
-        {
-            var buffer = new Buffer(2);
-            buffer.Write(uid);
-            buffer.Write(type);
-            buffer.Write(data);
-            buffer.Goto(0);
-            buffer.Write(buffer.length);
-            
-            if (buffer.length > Constants.MaxPacketSize)
-                return SendLargeBuffer(client, data.ToBuffer(), type, uid);
-            
-            return client.Remote.Send(buffer.ToBuffer(), buffer.length) ? uid : ushort.MaxValue;
-        }
-
-        public static ushort SendLargeBuffer(Client client, byte[] data, ResponseType type, ushort uid = 0x0000)
-        {
-            Logger.Debug($"Fragmenting large packet of {data.Length} bytes for {client}");
-            
-            var fragments = MultiPacketManager.FragmentData(data, type, uid);
-            if (fragments.Count == 0)
-            {
-                Logger.Warning($"Failed to fragment large packet for {client}");
-                return ushort.MaxValue;
-            }
-
-            // Send start packet
-            var startBuffer = new Buffer(2);
-            startBuffer.Write(uid);
-            startBuffer.Write(ResponseType.MultiPacketStart);
-            startBuffer.Write(fragments[0]);
-            startBuffer.Goto(0);
-            startBuffer.Write(startBuffer.length);
-            
-            if (!client.Remote.Send(startBuffer.ToBuffer(), startBuffer.length))
-            {
-                Logger.Warning($"Failed to send multipacket start to {client}");
-                return ushort.MaxValue;
-            }
-
-            // Send data packets
-            for (int i = 1; i < fragments.Count - 1; i++)
-            {
-                var dataBuffer = new Buffer(2);
-                dataBuffer.Write((ushort)(uid + i)); // Use incremental UIDs for tracking
-                dataBuffer.Write(ResponseType.MultiPacketData);
-                dataBuffer.Write(fragments[i]);
-                dataBuffer.Goto(0);
-                dataBuffer.Write(dataBuffer.length);
-                
-                if (!client.Remote.Send(dataBuffer.ToBuffer(), dataBuffer.length))
-                {
-                    Logger.Warning($"Failed to send multipacket data {i} to {client}");
-                    return ushort.MaxValue;
-                }
-            }
-
-            // Send end packet
-            var endBuffer = new Buffer(2);
-            endBuffer.Write((ushort)(uid + fragments.Count - 1));
-            endBuffer.Write(ResponseType.MultiPacketEnd);
-            endBuffer.Write(fragments[fragments.Count - 1]);
-            endBuffer.Goto(0);
-            endBuffer.Write(endBuffer.length);
-            
-            if (!client.Remote.Send(endBuffer.ToBuffer(), endBuffer.length))
-            {
-                Logger.Warning($"Failed to send multipacket end to {client}");
-                return ushort.MaxValue;
-            }
-
-            Logger.Debug($"Successfully sent large packet in {fragments.Count} fragments to {client}");
-            return uid;
-        }
-
-        public static async void Check()
-        {
-            var config = Config.Load();
-            Logger.Debug($"Clients timeout set to {config.GetConnectionTimeout()} seconds");
-            while (true)
-            {
-                foreach (var client in ClientManager.Clients.ToArray())
-                    if (client.LastSeen.AddSeconds(config.GetConnectionTimeout()) < DateTime.UtcNow)
-                        client.OnTimeout();
-                await Task.Delay(1000);
+                data.Payload.Goto(5);
+                handler(data);
             }
         }
     }
+
+    private static void Timeout()
+    {
+        var now = DateTime.UtcNow;
+        var timeout = Config.Load().GetConnectionTimeout();
+        foreach (var client in ClientManager.Clients.Where(client => !((now - client.LastSeen).TotalSeconds < timeout)))
+            client.OnTimeout();
+    }
+
+    #endregion
 }

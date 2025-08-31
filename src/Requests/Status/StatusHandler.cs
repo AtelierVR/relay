@@ -1,68 +1,77 @@
 ﻿using Relay.Clients;
 using Relay.Instances;
 using Relay.Master;
+using Relay.Packets;
+using Relay.Priority;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;
 
 namespace Relay.Requests.Status;
 
-public class StatusHandler : Handler
-{
-    public override void OnReceive(Buffer buffer, Client client)
-    {
-        if (client.Status == ClientStatus.Disconnected) return;
-        buffer.Goto(0);
-        var length = buffer.ReadUShort();
-        var uid = buffer.ReadUShort();
-        var type = buffer.ReadEnum<RequestType>();
-        if (type != RequestType.Status) return;
-        Logger.Debug($"{client} sent status");
-        var pagnation = buffer.ReadByte();
-        var response = new Buffer();
-        var pages = GetPages((ushort)(Constants.MaxPacketSize - response.length - 2));
-        Logger.Debug($"{client} requested page {pagnation+1} of {pages.Length}");
-        if (pagnation >= pages.Length)
-            response.Write((byte)0);
-        else response.Write(pages[pagnation]);
-        response.Write(pagnation);
-        response.Write((byte)pages.Length);
-        Request.SendBuffer(client, response, ResponseType.Status, uid);
-    }
+public class StatusHandler : Handler {
+	protected override void OnSetup() {
+		PacketPriorityManager.SetMinimumPriority(RequestType.Status, EPriority.Normal);
+		PacketDispatcher.RegisterHandler(RequestType.Status, OnStatus);
+	}
 
-    private static Buffer[] GetPages(ushort bytesPerPage)
-    {
-        var liBuffer = new List<Buffer>();
-        var buffer = new Buffer(1);
-        byte nbinstance = 0;
-        foreach (var instance in InstanceManager.Instances)
-        {
-            var instanceBuffer = new Buffer();
-            instanceBuffer.Write(instance.Flags);
-            instanceBuffer.Write(instance.InternalId);
-            instanceBuffer.Write(instance.MasterId);
-            instanceBuffer.Write((ushort)instance.Players.Count);
-            instanceBuffer.Write(instance.Capacity);
+	private static void OnStatus(PacketData data) {
+		// Reject if not handshake
+		if (!data.Client.IsHandshake) return;
 
-            if (buffer.length + instanceBuffer.length > bytesPerPage || nbinstance >= byte.MaxValue)
-            {
-                buffer.Goto(0);
-                buffer.Write(nbinstance);
-                liBuffer.Add(buffer);
-                buffer = new Buffer(1);
-                nbinstance = 0;
-            }
+		var pagination = data.Payload.ReadByte();
+        Logger.Debug($"{data.Client} requested status page {pagination}");
 
-            buffer.Write(instanceBuffer);
-            nbinstance++;
-        }
+		var response  = Buffer.New();
+		var pages = GetPages(Constants.MaxPacketSize - 2);
+		if (pagination >= pages.Length)
+			response.Write((byte)0);
+		else response.Write(pages[pagination]);
 
-        if (nbinstance > 0)
-        {
-            buffer.Goto(0);
-            buffer.Write(nbinstance);
-            liBuffer.Add(buffer);
-        }
+		response.Write(pagination);
+		response.Write((byte)pages.Length);
 
-        return liBuffer.ToArray();
-    }
+        Logger.Debug($"{response}");
+
+		Request.SendBuffer(data.Client, response, ResponseType.Status, data.Uid);
+	}
+
+
+	private static Buffer[] GetPages(ushort bytesPerPage) {
+		var liBuffer = new List<Buffer>();
+		
+		var buffer   = Buffer.New();
+		buffer.Skip(1);
+		
+		byte nb = 0;
+		foreach (var instance in InstanceManager.Instances) {
+			var instanceBuffer = Buffer.New();
+			instanceBuffer.Write(instance.Flags);
+			instanceBuffer.Write(instance.InternalId);
+			instanceBuffer.Write(instance.MasterId);
+			instanceBuffer.Write((ushort)instance.Players.Count);
+			instanceBuffer.Write(instance.Capacity);
+
+			if (buffer.Length + instanceBuffer.Length > bytesPerPage || nb >= byte.MaxValue) {
+				buffer.Goto(0);
+				buffer.Write(nb);
+				liBuffer.Add(buffer);
+				buffer = Buffer.New();
+				buffer.Skip(1);
+				nb = 0;
+			}
+
+			buffer.Write(instanceBuffer);
+			nb++;
+		}
+
+		if (nb <= 0)
+			return [.. liBuffer];
+
+		buffer.Goto(0);
+		buffer.Write(nb);
+		liBuffer.Add(buffer);
+
+
+		return [.. liBuffer];
+	}
 }

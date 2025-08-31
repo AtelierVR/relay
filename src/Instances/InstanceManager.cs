@@ -2,7 +2,7 @@ namespace Relay.Instances;
 
 public class InstanceManager
 {
-    public static List<Instance> Instances = new();
+    public static readonly List<Instance> Instances = [];
 
     public static Instance? Get(byte internalId)
         => Instances.Find(instance => instance.InternalId == internalId);
@@ -26,4 +26,7 @@ public class InstanceManager
             internalId++;
         return internalId;
     }
+
+    public static List<Instance> GetAllInstances()
+        => Instances;
 }

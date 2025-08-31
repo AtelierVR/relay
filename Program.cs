@@ -1,59 +1,61 @@
 ﻿using Relay.Master;
 using Relay.Requests;
 using Relay.Utils;
-using Relay.LoadBalancing;
 
 namespace Relay
 {
-    internal class MainProcess
-    {
-        public static void Main(string[] args)
-        {
-            Logger.Log("Starting NoxRelay...");
-            if (Logger.PrintDebug)
-                Logger.Warning("Debug mode enabled");
+	internal class MainProcess
+	{
+		private static readonly ManualResetEvent ShutdownEvent = new(false);
 
-            // Initialize BufferPool
-            BufferPool.Instance.Preload(100);
-            Logger.Log("BufferPool initialized and preloaded");
+		public static void Main(string[] args)
+		{
+			Logger.Log("Starting NoxRelay...");
+			if (Logger.PrintDebug)
+				Logger.Warning("Debug mode enabled");
 
-            // Initialize LoadBalancer
-            var loadBalancerManager = LoadBalancerManager.Instance;
-            Logger.Log("LoadBalancer initialized");
+			Console.CancelKeyPress += OnCancelKeyPress;
+			AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
 
-            // Starting the server
-            Handler.Listing();
+			Handler.Listing();
 
-            var thread1 = new Thread(WorkerUdpRecv);
-            var thread2 = new Thread(WorkerNetCheck);
-            var thread3 = new Thread(WorkerMaster);
-            var thread4 = new Thread(WorkerTcpRecv);
+			MasterServer.Start();
+			TcpReceiver.Start();
+			UdpReceiver.Start();
+			Request.Start();
 
-            // Starting the threads
-            thread1.Start();
-            thread2.Start();
-            thread3.Start();
-            thread4.Start();
+			Logger.Log("NoxRelay started");
+			Logger.Log("Press Ctrl+C to stop the server...");
 
-            Logger.Log("All worker threads started");
+			// Attendre le signal d'arrêt
+			ShutdownEvent.WaitOne();
+		}
 
-            // Waiting for the threads to finish
-            thread1.Join();
-            thread2.Join();
-            thread3.Join();
-            thread4.Join();
-        }
+		private static void OnCancelKeyPress(object? sender, ConsoleCancelEventArgs e)
+		{
+			Logger.Log("Ctrl+C pressed. Initiating graceful shutdown...");
+			e.Cancel = true;
+			Stop();
+		}
 
-        static void WorkerUdpRecv()
-            => UdpRecv.Start();
+		private static void OnProcessExit(object? sender, EventArgs e)
+		{
+			Logger.Log("Process exit signal received. Initiating graceful shutdown...");
+			Stop();
+		}
 
-        static void WorkerNetCheck()
-            => Request.Check();
+		private static void Stop()
+		{
+			Logger.Log("Stopping NoxRelay...");
+			Request.Stop();
+			TcpReceiver.Stop();
+			UdpReceiver.Stop();
+			MasterServer.Stop();
 
-        static void WorkerMaster()
-            => MasterServer.Start();
+			// Signaler que l'arrêt est terminé
+			ShutdownEvent.Set();
 
-        static void WorkerTcpRecv()
-            => TCPRecv.Start();
-    }
+			Logger.Log("NoxRelay stopped");
+		}
+	}
 }

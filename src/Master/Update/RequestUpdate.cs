@@ -21,7 +21,6 @@ public class RequestClient
 {
     public ushort id { get; set; }
     public string remote { get; set; }
-    public string status { get; set; }
     public string platform { get; set; }
     public string engine { get; set; }
     public ulong last_seen { get; set; }

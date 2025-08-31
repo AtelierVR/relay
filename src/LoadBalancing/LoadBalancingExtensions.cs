@@ -53,7 +53,7 @@ namespace Relay.LoadBalancing
         /// <summary>
         /// Gets or creates a client ID for load balancer tracking
         /// </summary>
-        public static string GetClientId(this IRemote remote)
+        public static string GetClientId(this Remote remote)
         {
             return $"{remote.Address}:{remote.Port}";
         }

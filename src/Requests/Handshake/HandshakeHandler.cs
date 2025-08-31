@@ -1,70 +1,54 @@
 ﻿using Relay.Clients;
 using Relay.Master;
-using Relay.Requests.Disconnect;
+using Relay.Packets;
+using Relay.Priority;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;
 
 namespace Relay.Requests.Handshake;
 
-public class HandshakeHandler : Handler
-{
-    public override void OnReceive(Buffer buffer, Client client)
-    {
-        buffer.Goto(0);
-        var length = buffer.ReadUShort();
-        var uid = buffer.ReadUShort();
-        var type = buffer.ReadEnum<RequestType>();
-        if (type != RequestType.Handshake) return;
-        Logger.Debug($"{client} sent handshake with uid={uid:X4}");
+public class HandshakeHandler : Handler {
+	protected override void OnSetup() {
+		PacketPriorityManager.SetMinimumPriority(RequestType.Handshake, EPriority.Critical);
+		PacketDispatcher.RegisterHandler(RequestType.Handshake, OnHandshake);
+	}
 
-        var protocol = buffer.ReadUShort();
-        var engine = buffer.ReadString();
-        var platform = buffer.ReadString();
+	private static void OnHandshake(PacketData data) {
+		var protocol = data.Payload.ReadUShort();
+		if (protocol != Constants.ProtocolVersion) {
+			Logger.Debug($"{data.Client} sent incompatible handshake");
+			Logger.Debug($"{data.Client} sent {protocol} but we are on {Constants.ProtocolVersion}");
+			Logger.Debug($"{data.Client} sent {data.Payload}");
+			return;
+		}
 
-        if (protocol != Constants.ProtocolVersion)
-        {
-            DisconnectHandler.SendEvent(client, string.Format(Messages.IncompatibleProtocol, protocol, Constants.ProtocolVersion));
-            return;
-        }
+		data.Client.Engine      = data.Payload.ReadString() ?? string.Empty;
+		data.Client.Platform    = data.Payload.ReadString() ?? string.Empty;
+		data.Client.IsHandshake = true;
 
-        client.Engine = engine ?? "";
-        client.Platform = platform ?? "";
+		var response = Buffer.New();
+		var config   = Config.Load();
 
-        if (client.Status == ClientStatus.Disconnected)
-            client.Status = ClientStatus.Handshaked;
+		response.Write(Constants.ProtocolVersion);
+		response.Write(data.Client.Id);
 
-        var response = new Buffer();
-        var config = Config.Load();
+		response.Write(data.Client.Remote.Address.GetAddressBytes());
+		response.Write(data.Client.Remote.Port);
 
-        Logger.Debug($"Creating handshake response for {client}");
+		var flags     = HandshakeFlags.None;
+		var master    = MasterServer.GetMasterAddress();
+		var hasMaster = !string.IsNullOrEmpty(master);
 
-        response.Write(Constants.ProtocolVersion);
-        response.Write(client.Id);
-        response.Write(client.Status);
+		if (!hasMaster) flags |= HandshakeFlags.IsOffline;
+		response.Write(flags);
+		if (hasMaster) response.Write(master);
+		
+		response.Write(Constants.MaxPacketSize);
+		response.Write(config.GetConnectionTimeout());
+		response.Write(config.GetKeepAliveInterval());
 
-        try
-        {
-            response.Write(client.Remote.Address.GetAddressBytes());
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"Failed to write address bytes: {ex.Message}");
-            response.Write(new byte[] { 0, 0, 0, 0 }); // Fallback
-        }
+		Request.SendBuffer(data.Client, response, ResponseType.Handshake, data.Uid);
 
-        response.Write(client.Remote.Port);
-        HandshakeFlags flags = HandshakeFlags.None;
-        if (string.IsNullOrEmpty(MasterServer.MasterAddress))
-            flags |= HandshakeFlags.IsOffline;
-        response.Write(flags);
-        if (!flags.HasFlag(HandshakeFlags.IsOffline))
-            response.Write(MasterServer.MasterAddress);
-        response.Write(Constants.MaxPacketSize);
-        response.Write(config.GetConnectionTimeout());
-        response.Write(config.GetKeepAliveInterval());
-
-        Logger.Debug($"Handshake response buffer length: {response.length}");
-        Logger.Debug($"Sending handshake response with uid={uid:X4}");
-        Request.SendBuffer(client, response, ResponseType.Handshake, uid);
-    }
+		Logger.Debug($"{data.Client} handshake");
+	}
 }

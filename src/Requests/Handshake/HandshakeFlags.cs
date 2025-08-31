@@ -1,6 +1,7 @@
 ﻿
 namespace Relay.Requests.Handshake;
 
+[Flags]
 public enum HandshakeFlags : byte
 {
     None = 0,

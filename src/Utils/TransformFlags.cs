@@ -1,5 +1,6 @@
 ﻿namespace Relay.Utils;
 
+[Flags]
 public enum TransformFlags : byte
 {
     None = 0,

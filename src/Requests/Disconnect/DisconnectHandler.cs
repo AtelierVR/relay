@@ -1,4 +1,6 @@
 ﻿using Relay.Clients;
+using Relay.Packets;
+using Relay.Priority;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;
 
@@ -6,26 +8,32 @@ namespace Relay.Requests.Disconnect;
 
 public class DisconnectHandler : Handler
 {
-    public override void OnReceive(Buffer buffer, Client client)
+    protected override void OnSetup()
     {
-        if (client.Status == ClientStatus.Disconnected) return;
-        buffer.Goto(0);
-        var length = buffer.ReadUShort();
-        var uid = buffer.ReadUShort();
-        var type = buffer.ReadEnum<RequestType>();
-        if (type != RequestType.Disconnect) return;
-        var reason = buffer.ReadString();
-        SendEvent(client, "Good Bye!");
+        PacketPriorityManager.SetMinimumPriority(RequestType.Disconnect, EPriority.Critical);
+        PacketDispatcher.RegisterHandler(RequestType.Disconnect, OnDisconnect);
     }
 
-    public static void SendEvent(Client client, string reason)
+    public static void OnDisconnect(PacketData data)
     {
-        if (client.Status == ClientStatus.Disconnected) return;
-        var buffer = new Buffer();
-        if (!string.IsNullOrEmpty(reason))
+        // Reject if not handshaked
+        if (!data.Client.IsHandshake) return;
+
+        if (data.Payload.Remaining() > 0)
+        {
+            var reason = data.Payload.ReadString() ?? string.Empty;
+            Logger.Warning($"{data.Client} disconnected: {reason}");
+        }
+        SendEvent(data.Client);
+    }
+
+    public static void SendEvent(Client client, string? reason = null)
+    {
+        var buffer = Buffer.New();
+        if (reason != null)
             buffer.Write(reason);
         Request.SendBuffer(client, buffer, ResponseType.Disconnect);
-        client.Status = ClientStatus.Disconnected;
+        client.IsHandshake = false;
         client.OnDisconnect(reason);
         ClientManager.Remove(client);
     }

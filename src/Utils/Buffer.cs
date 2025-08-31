@@ -1,334 +1,313 @@
 ﻿using System.Numerics;
 
-namespace Relay.Utils
-{
-    public class Buffer
-    {
-        public byte[] data;
-        public ushort offset;
-        public ushort length;
+namespace Relay.Utils {
+	public class Buffer(byte[] data) {
+		public const int DefaultLength = Constants.MaxPacketSize;
 
-        public Buffer(ushort offset = 0)
-        {
-            Clear();
-            data = new byte[1024];
-            this.offset = offset;
-            length = offset;
-        }
+		private byte[] _data   = data;
+		private int    _length = data.Length;
+		private int    _offset = 0;
 
-        public bool Write(byte value)
-        {
-            if (offset + 1 > data.Length) return false;
-            data[offset++] = value;
-            if (offset > length) length = offset;
-            return true;
-        }
-
-        public bool Write(short value)
-        {
-            if (offset + 2 > data.Length) return false;
-            data[offset++] = (byte)(value >> 8);
-            data[offset++] = (byte)value;
-            if (offset > length) length = offset;
-            return true;
-        }
-
-        public bool Write(ushort value) => Write((short)value);
-
-        public bool Write(string value)
-        {
-            if (value == null || offset + value.Length + 2 > data.Length) return false;
-            if (!Write((ushort)value.Length)) return false;
-            foreach (var c in value)
-                data[offset++] = (byte)c;
-            if (offset > length) length = offset;
-            return true;
-        }
-
-        public bool Write(DateTimeOffset value) => Write(value.ToUnixTimeMilliseconds());
-
-        public bool Write(int value)
-        {
-            if (offset + 4 > data.Length) return false;
-            data[offset++] = (byte)(value >> 24);
-            data[offset++] = (byte)(value >> 16);
-            data[offset++] = (byte)(value >> 8);
-            data[offset++] = (byte)value;
-            if (offset > length) length = offset;
-            return true;
-        }
-
-        public bool Write(uint value) => Write((int)value);
-
-        public bool Write(long value)
-        {
-            if (offset + 8 > data.Length) return false;
-            data[offset++] = (byte)(value >> 56);
-            data[offset++] = (byte)(value >> 48);
-            data[offset++] = (byte)(value >> 40);
-            data[offset++] = (byte)(value >> 32);
-            data[offset++] = (byte)(value >> 24);
-            data[offset++] = (byte)(value >> 16);
-            data[offset++] = (byte)(value >> 8);
-            data[offset++] = (byte)value;
-            if (offset > length) length = offset;
-            return true;
-        }
-
-        public bool Write(ulong value) => Write((long)value);
-
-        public bool Write(float value)
-        {
-            if (offset + 4 > data.Length) return false;
-            var bytes = BitConverter.GetBytes(value);
-            if (BitConverter.IsLittleEndian) Array.Reverse(bytes);
-            foreach (var b in bytes)
-                data[offset++] = b;
-            if (offset > length) length = offset;
-            return true;
-        }
+		public static Buffer New(int length = DefaultLength)
+			=> new(new byte[length]) { _length = 0 };
 
 
-        public bool Write(double value)
-        {
-            if (offset + 8 > data.Length) return false;
-            var bytes = BitConverter.GetBytes(value);
-            if (BitConverter.IsLittleEndian) Array.Reverse(bytes);
-            foreach (var b in bytes)
-                data[offset++] = b;
-            if (offset > length) length = offset;
-            return true;
-        }
+		public int Length
+			=> _length;
 
-        public bool Write(Vector3 value)
-        {
-            if (offset + 12 > data.Length) return false;
-            if (!Write(value.X)) return false;
-            if (!Write(value.Y)) return false;
-            if (!Write(value.Z)) return false;
-            if (offset > length) length = offset;
-            return true;
-        }
+		public int Offset
+			=> _offset;
 
-        public bool Write(Quaternion value)
-        {
-            if (offset + 16 > data.Length) return false;
-            if (!Write(value.X)) return false;
-            if (!Write(value.Y)) return false;
-            if (!Write(value.Z)) return false;
-            if (!Write(value.W)) return false;
-            if (offset > length) length = offset;
-            return true;
-        }
+		public bool Write(byte value) {
+			if (_offset + 1 > _data.Length) return false;
+			_data[_offset++] = value;
+			if (_offset > _length) _length = _offset;
+			return true;
+		}
 
-        public bool Write(byte[] value)
-        {
-            if (offset + value.Length > data.Length) return false;
-            foreach (var b in value)
-                data[offset++] = b;
-            if (offset > length) length = offset;
-            return true;
-        }
+		public bool Write(short value) {
+			if (_offset + 2 > _data.Length) return false;
+			_data[_offset++] = (byte)(value >> 8);
+			_data[_offset++] = (byte)value;
+			if (_offset > _length) _length = _offset;
+			return true;
+		}
 
-        public byte[] ToBuffer()
-        {
-            var buffer = new byte[length];
-            Array.Copy(data, buffer, length);
-            return buffer;
-        }
+		public bool Write(ushort value)
+			=> Write((short)value);
 
-        public void Goto(ushort offset) => this.offset = offset;
-        public void GotoEnd() => offset = length;
-        public void Skip(ushort offset) => this.offset += offset;
+		public bool Write(string value) {
+			if (value == null || _offset + value.Length + 2 > _data.Length) return false;
+			if (!Write((ushort)value.Length)) return false;
+			foreach (var c in value)
+				_data[_offset++] = (byte)c;
+			if (_offset > _length) _length = _offset;
+			return true;
+		}
 
-        public override string ToString()
-        {
-            var res = $"Buffer[(offset={offset.ToString()}, length={length.ToString()}) ";
-            try
-            {
+		public bool Write(DateTimeOffset value)
+			=> Write(value.ToUnixTimeMilliseconds());
 
-                for (var i = 0; i < length; i++) res += (i == 0 ? "" : " ") + data[i].ToString("X2");
-            }
-            catch (Exception e)
-            {
-                Logger.Error(e.ToString());
-            }
-            return res + "]";
-        }
+		public bool Write(int value) {
+			if (_offset + 4 > _data.Length) return false;
+			_data[_offset++] = (byte)(value >> 24);
+			_data[_offset++] = (byte)(value >> 16);
+			_data[_offset++] = (byte)(value >> 8);
+			_data[_offset++] = (byte)value;
+			if (_offset > _length) _length = _offset;
+			return true;
+		}
 
-        public byte ReadByte()
-        {
-            if (offset + 1 > length) return 0;
-            return data[offset++];
-        }
+		public bool Write(uint value)
+			=> Write((int)value);
 
-        public ushort ReadUShort()
-        {
-            if (offset + 2 > length) return 0;
-            var value = (ushort)(data[offset++] << 8);
-            value |= data[offset++];
-            return value;
-        }
+		public bool Write(long value) {
+			if (_offset + 8 > _data.Length) return false;
+			_data[_offset++] = (byte)(value >> 56);
+			_data[_offset++] = (byte)(value >> 48);
+			_data[_offset++] = (byte)(value >> 40);
+			_data[_offset++] = (byte)(value >> 32);
+			_data[_offset++] = (byte)(value >> 24);
+			_data[_offset++] = (byte)(value >> 16);
+			_data[_offset++] = (byte)(value >> 8);
+			_data[_offset++] = (byte)value;
+			if (_offset > _length) _length = _offset;
+			return true;
+		}
 
-        public string? ReadString()
-        {
-            var length = ReadUShort();
-            if (offset + length > this.length) return null;
-            var value = System.Text.Encoding.UTF8.GetString(data, offset, length);
-            offset += length;
-            return value;
-        }
+		public bool Write(ulong value)
+			=> Write((long)value);
 
-        public DateTime ReadDateTime()
-        {
-            var value = ReadLong();
-            return DateTimeOffset.FromUnixTimeMilliseconds(value).DateTime;
-        }
+		public bool Write(float value) {
+			if (_offset + 4 > _data.Length) return false;
+			var bytes = BitConverter.GetBytes(value);
+			if (BitConverter.IsLittleEndian) Array.Reverse(bytes);
+			foreach (var b in bytes)
+				_data[_offset++] = b;
+			if (_offset > _length) _length = _offset;
+			return true;
+		}
 
-        public int ReadInt()
-        {
-            if (offset + 4 > length) return 0;
-            var value = data[offset++] << 24;
-            value |= data[offset++] << 16;
-            value |= data[offset++] << 8;
-            value |= data[offset++];
-            return value;
-        }
 
-        public long ReadLong()
-        {
-            if (offset + 8 > length) return 0;
-            var value = (long)data[offset++] << 56;
-            value |= (long)data[offset++] << 48;
-            value |= (long)data[offset++] << 40;
-            value |= (long)data[offset++] << 32;
-            value |= (long)data[offset++] << 24;
-            value |= (long)data[offset++] << 16;
-            value |= (long)data[offset++] << 8;
-            value |= data[offset++];
-            return value;
-        }
+		public bool Write(double value) {
+			if (_offset + 8 > _data.Length) return false;
+			var bytes = BitConverter.GetBytes(value);
+			if (BitConverter.IsLittleEndian) Array.Reverse(bytes);
+			foreach (var b in bytes)
+				_data[_offset++] = b;
+			if (_offset > _length) _length = _offset;
+			return true;
+		}
 
-        public float ReadFloat()
-        {
-            if (offset + 4 > length) return 0;
-            var bytes = new byte[4];
-            for (var i = 0; i < 4; i++)
-                bytes[i] = data[offset++];
-            if (BitConverter.IsLittleEndian) Array.Reverse(bytes);
-            return BitConverter.ToSingle(bytes, 0);
-        }
+		public bool Write(Vector3 value) {
+			if (_offset + 12 > _data.Length) return false;
+			if (!Write(value.X)) return false;
+			if (!Write(value.Y)) return false;
+			if (!Write(value.Z)) return false;
+			if (_offset > _length) _length = _offset;
+			return true;
+		}
 
-        public double ReadDouble()
-        {
-            if (offset + 8 > length) return 0;
-            var bytes = new byte[8];
-            for (var i = 0; i < 8; i++)
-                bytes[i] = data[offset++];
-            if (BitConverter.IsLittleEndian) Array.Reverse(bytes);
-            return BitConverter.ToDouble(bytes, 0);
-        }
+		public bool Write(Quaternion value) {
+			if (_offset + 16 > _data.Length) return false;
+			if (!Write(value.X)) return false;
+			if (!Write(value.Y)) return false;
+			if (!Write(value.Z)) return false;
+			if (!Write(value.W)) return false;
+			if (_offset > _length) _length = _offset;
+			return true;
+		}
 
-        public Vector3 ReadVector3()
-        {
-            if (offset + 12 > length) return Vector3.Zero;
-            var x = ReadFloat();
-            var y = ReadFloat();
-            var z = ReadFloat();
-            return new Vector3(x, y, z);
-        }
+		public bool Write(byte[] value) {
+			if (_offset + value.Length > _data.Length) return false;
+			foreach (var b in value)
+				_data[_offset++] = b;
+			if (_offset > _length) _length = _offset;
+			return true;
+		}
 
-        public Quaternion ReadQuaternion()
-        {
-            if (offset + 16 > length) return Quaternion.Identity;
-            var x = ReadFloat();
-            var y = ReadFloat();
-            var z = ReadFloat();
-            var w = ReadFloat();
-            return new Quaternion(x, y, z, w);
-        }
+		public byte[] ToBuffer() {
+			var buffer = new byte[_length];
+			System.Buffer.BlockCopy(_data, 0, buffer, 0, _length);
+			return buffer;
+		}
 
-        public byte[]? ReadBytes(ushort length)
-        {
-            if (offset + length > this.length) return null;
-            var value = new byte[length];
-            Array.Copy(data, offset, value, 0, length);
-            offset += length;
-            return value;
-        }
+		public void Goto(ushort offset)
+			=> _offset = offset;
 
-        public uint ReadUInt() => (uint)ReadInt();
+		public void GotoEnd()
+			=> _offset = _length;
 
-        public Buffer Clone(ushort os = 0, ushort len = 0)
-        {
-            var buffer = new Buffer(os) { data = new byte[len == 0 ? data.Length : len] };
-            Array.Copy(data, buffer.data, len == 0 ? data.Length : len);
-            buffer.offset = offset;
-            buffer.length = len == 0 ? length : len;
-            return buffer;
-        }
+		public void Skip(ushort offset)
+			=> _offset += offset;
 
-        public void Clear()
-        {
-            offset = 0;
-            length = 0;
-            data = new byte[Constants.MaxPacketSize];
-        }
+		public override string ToString() {
+			var res = $"Buffer[(offset={_offset.ToString()}, length={_length.ToString()}) ";
+			try {
+				for (var i = 0; i < _length; i++) res += (i == 0 ? "" : " ") + _data[i].ToString("X2");
+			} catch (Exception e) {
+				Logger.Error(e.ToString());
+			}
 
-        public int Remaining()
-            => length - offset;
+			return res + "]";
+		}
 
-        public bool Write(Buffer buffer)
-        {
-            if (offset + buffer.length > data.Length) return false;
-            for (var i = 0; i < buffer.length; i++)
-                data[offset++] = buffer.data[i];
-            if (offset > length) length = offset;
-            return true;
-        }
+		public byte ReadByte() {
+			if (_offset + 1 > _length) return 0;
+			return _data[_offset++];
+		}
 
-        public T? Read<T>()
-        {
-            if (typeof(T) == typeof(byte)) return (T)(object)ReadByte();
-            if (typeof(T) == typeof(ushort)) return (T)(object)ReadUShort();
-            if (typeof(T) == typeof(string))
-            {
-                var value = ReadString();
-                return value != null ? (T)(object)value : default;
-            }
-            if (typeof(T) == typeof(DateTime)) return (T)(object)ReadDateTime();
-            if (typeof(T) == typeof(int)) return (T)(object)ReadInt();
-            if (typeof(T) == typeof(long)) return (T)(object)ReadLong();
-            if (typeof(T) == typeof(float)) return (T)(object)ReadFloat();
-            if (typeof(T) == typeof(double)) return (T)(object)ReadDouble();
-            if (typeof(T) == typeof(Vector3)) return (T)(object)ReadVector3();
-            if (typeof(T) == typeof(Quaternion)) return (T)(object)ReadQuaternion();
-            if (typeof(T) == typeof(byte[]))
-            {
-                var value = ReadBytes(ReadUShort());
-                return value != null ? (T)(object)value : default;
-            }
-            if (typeof(T) == typeof(uint)) return (T)(object)ReadUInt();
-            if (typeof(T) == typeof(Buffer)) return (T)(object)Clone();
-            return default;
-        }
+		public ushort ReadUShort() {
+			if (_offset + 2 > _length) return 0;
+			var value = (ushort)(_data[_offset++] << 8);
+			value |= _data[_offset++];
+			return value;
+		}
 
-        public T? ReadEnum<T>() where T : Enum
-        {
-            var type = Enum.GetUnderlyingType(typeof(T));
-            if (type == typeof(byte)) return (T)(object)ReadByte();
-            if (type == typeof(ushort)) return (T)(object)ReadUShort();
-            if (type == typeof(uint)) return (T)(object)ReadUInt();
-            return default;
-        }
-        
-        public bool Write(Enum value)
-        {
-            var type = Enum.GetUnderlyingType(value.GetType());
-            if (type == typeof(byte)) return Write(Convert.ToByte(value));
-            if (type == typeof(ushort)) return Write(Convert.ToUInt16(value));
-            if (type == typeof(uint)) return Write(Convert.ToUInt32(value));
-            return false;
-        }
-    }
+		public string? ReadString() {
+			var length = ReadUShort();
+			if (_offset + length > this._length) return null;
+			var value = System.Text.Encoding.UTF8.GetString(_data, _offset, length);
+			_offset += length;
+			return value;
+		}
+
+		public DateTime ReadDateTime() {
+			var value = ReadLong();
+			return DateTimeOffset.FromUnixTimeMilliseconds(value).DateTime;
+		}
+
+		public int ReadInt() {
+			if (_offset + 4 > _length) return 0;
+			var value = _data[_offset++] << 24;
+			value |= _data[_offset++] << 16;
+			value |= _data[_offset++] << 8;
+			value |= _data[_offset++];
+			return value;
+		}
+
+		public long ReadLong() {
+			if (_offset + 8 > _length) return 0;
+			var value = (long)_data[_offset++] << 56;
+			value |= (long)_data[_offset++] << 48;
+			value |= (long)_data[_offset++] << 40;
+			value |= (long)_data[_offset++] << 32;
+			value |= (long)_data[_offset++] << 24;
+			value |= (long)_data[_offset++] << 16;
+			value |= (long)_data[_offset++] << 8;
+			value |= _data[_offset++];
+			return value;
+		}
+
+		public float ReadFloat() {
+			if (_offset + 4 > _length) return 0;
+			var bytes = new byte[4];
+			for (var i = 0; i < 4; i++)
+				bytes[i] = _data[_offset++];
+			if (BitConverter.IsLittleEndian) Array.Reverse(bytes);
+			return BitConverter.ToSingle(bytes, 0);
+		}
+
+		public double ReadDouble() {
+			if (_offset + 8 > _length) return 0;
+			var bytes = new byte[8];
+			for (var i = 0; i < 8; i++)
+				bytes[i] = _data[_offset++];
+			if (BitConverter.IsLittleEndian) Array.Reverse(bytes);
+			return BitConverter.ToDouble(bytes, 0);
+		}
+
+		public Vector3 ReadVector3() {
+			if (_offset + 12 > _length) return Vector3.Zero;
+			var x = ReadFloat();
+			var y = ReadFloat();
+			var z = ReadFloat();
+			return new Vector3(x, y, z);
+		}
+
+		public Quaternion ReadQuaternion() {
+			if (_offset + 16 > _length) return Quaternion.Identity;
+			var x = ReadFloat();
+			var y = ReadFloat();
+			var z = ReadFloat();
+			var w = ReadFloat();
+			return new Quaternion(x, y, z, w);
+		}
+
+		public byte[] ReadBytes(ushort length) {
+			if (_offset + length > _length) return [];
+			var value = new byte[length];
+			Array.Copy(_data, _offset, value, 0, length);
+			_offset += length;
+			return value;
+		}
+
+		public uint ReadUInt()
+			=> (uint)ReadInt();
+
+		public Buffer Clone(ushort os = 0, ushort len = 0) {
+			var buffer = new Buffer(new byte[len == 0 ? _data.Length : len]) { _offset = os };
+			Array.Copy(_data, buffer._data, len == 0 ? _data.Length : len);
+			buffer._offset = _offset;
+			buffer._length = len == 0 ? _length : len;
+			return buffer;
+		}
+
+		public void Clear() {
+			_offset = 0;
+			_length = 0;
+		}
+
+		public int Remaining()
+			=> _length - _offset;
+
+		public bool Write(Buffer buffer) {
+			if (_offset + buffer._length > _data.Length) return false;
+			for (var i = 0; i < buffer._length; i++)
+				_data[_offset++] = buffer._data[i];
+			if (_offset > _length) _length = _offset;
+			return true;
+		}
+
+		public T? Read<T>() {
+			if (typeof(T) == typeof(byte)) return (T)(object)ReadByte();
+			if (typeof(T) == typeof(ushort)) return (T)(object)ReadUShort();
+			if (typeof(T) == typeof(string)) {
+				var value = ReadString();
+				return value != null ? (T)(object)value : default;
+			}
+
+			if (typeof(T) == typeof(DateTime)) return (T)(object)ReadDateTime();
+			if (typeof(T) == typeof(int)) return (T)(object)ReadInt();
+			if (typeof(T) == typeof(long)) return (T)(object)ReadLong();
+			if (typeof(T) == typeof(float)) return (T)(object)ReadFloat();
+			if (typeof(T) == typeof(double)) return (T)(object)ReadDouble();
+			if (typeof(T) == typeof(Vector3)) return (T)(object)ReadVector3();
+			if (typeof(T) == typeof(Quaternion)) return (T)(object)ReadQuaternion();
+			if (typeof(T) == typeof(byte[])) {
+				var value = ReadBytes(ReadUShort());
+				return value != null ? (T)(object)value : default;
+			}
+
+			if (typeof(T) == typeof(uint)) return (T)(object)ReadUInt();
+			if (typeof(T) == typeof(Buffer)) return (T)(object)Clone();
+			return default;
+		}
+
+		public T? ReadEnum<T>() where T : Enum {
+			var type = Enum.GetUnderlyingType(typeof(T));
+			if (type == typeof(byte)) return (T)(object)ReadByte();
+			if (type == typeof(ushort)) return (T)(object)ReadUShort();
+			if (type == typeof(uint)) return (T)(object)ReadUInt();
+			return default;
+		}
+
+		public bool Write(Enum value) {
+			var type = Enum.GetUnderlyingType(value.GetType());
+			if (type == typeof(byte)) return Write(Convert.ToByte(value));
+			if (type == typeof(ushort)) return Write(Convert.ToUInt16(value));
+			if (type == typeof(uint)) return Write(Convert.ToUInt32(value));
+			return false;
+		}
+	}
 }
