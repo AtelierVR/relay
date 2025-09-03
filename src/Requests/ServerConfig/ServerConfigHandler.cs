@@ -24,7 +24,7 @@ public class ServerConfigHandler : Handler {
 			return;
 		}
 
-		var player = instance.Players.Find(p => p.ClientId == data.Client.Id);
+		var player = instance.GetPlayers().FirstOrDefault(p => p.ClientId == data.Client.Id);
 		if (player == null) {
 			SendResponse(data.Client, iid, data.Uid, ServerConfigResult.Failure, Messages.YouAreNotInInstance);
 			return;
@@ -80,7 +80,7 @@ public class ServerConfigHandler : Handler {
 
 		Logger.Log($"{player} updated instance config: {result}");
 
-		foreach (var other in instance.Players.Where(o => o.Client!.Id != data.Client.Id))
+		foreach (var other in instance.GetPlayers().Where(o => o.Client.Id != data.Client.Id))
 			SendConfigUpdate(instance, other, result);
 		SendConfigUpdate(instance, player, result, data.Uid);
 	}
@@ -95,7 +95,7 @@ public class ServerConfigHandler : Handler {
 	}
 
 	public static void BroadcastConfigUpdate(Instance instance, ServerConfigFlags configFlags, ushort uid = 0) {
-		foreach (var player in instance.Players) 
+		foreach (var player in instance.GetPlayers())
 			SendConfigUpdate(instance, player, configFlags, uid);
 	}
 

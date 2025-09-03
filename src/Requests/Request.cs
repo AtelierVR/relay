@@ -27,7 +27,8 @@ public static class Request
         var typ = (RequestType)buf[4];
         var pry = PacketPriorityManager.GetPriority(typ);
         var tsk = new ReceivePacket(remote, typ, buf, pry);
-        ReceiveQueue.TryEnqueue(tsk);
+        if (!ReceiveQueue.TryEnqueue(tsk))
+            Logger.Warning($"[Request.OnBuffer] Failed to enqueue packet for {remote}");
     }
 
     #endregion
@@ -53,7 +54,8 @@ public static class Request
         buf.Write(type);
         buf.Write(buffer);
         var tsk = new EmitterPacket(remote, buf.ToBuffer(), priority);
-        EmitterQueue.TryEnqueue(tsk);
+        if (!EmitterQueue.TryEnqueue(tsk))
+            Logger.Warning($"[Request.SendBuffer] Failed to enqueue packet for {remote}");
     }
 
     #endregion
@@ -69,47 +71,53 @@ public static class Request
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
 
-        Task.Run(
-            async () =>
-            {
-                while (!token.IsCancellationRequested)
+        var cpus = Environment.ProcessorCount / 4;
+        cpus = Math.Max(cpus, 1);
+
+        Logger.Debug($"[Request] Starting {cpus} request handler(s)...");
+
+        for (var i = 0; i < cpus; i++)
+            Task.Run(
+                async () =>
                 {
-                    try
+                    while (!token.IsCancellationRequested)
                     {
-                        Emit();
+                        try
+                        {
+                            Emit();
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Error($"[Request.Emit] {ex}");
+                        }
+
+                        await Task.Delay(1, token);
                     }
-                    catch (Exception ex)
-                    {
-                        Logger.Error($"[Request.Emit] {ex}");
-                    }
 
-                    await Task.Delay(1, token);
-                }
+                    Logger.Debug($"[Request] Stopped emitting.");
+                }, token);
 
-                Logger.Debug("[Request] Stopped emitting.");
-            }, token
-        );
-
-        Task.Run(
-            async () =>
-            {
-                while (!token.IsCancellationRequested)
+        for (var i = 0; i < cpus; i++)
+            Task.Run(
+                async () =>
                 {
-                    try
+                    while (!token.IsCancellationRequested)
                     {
-                        Receive();
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Error($"[Request.Receive] {ex}");
+                        try
+                        {
+                            Receive();
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Error($"[Request.Receive] {ex}");
+                        }
+
+                        await Task.Delay(1, token);
                     }
 
-                    await Task.Delay(1, token);
-                }
-
-                Logger.Debug("[Request] Stopped receiving.");
-            }, token
-        );
+                    Logger.Debug("[Request] Stopped receiving.");
+                }, token
+            );
 
         Task.Run(
             async () =>
@@ -138,13 +146,13 @@ public static class Request
         var t0 = DateTime.UtcNow;
         while (true)
         {
-            if (!EmitterQueue.TryDequeue(out var tsk)) break;
             if ((DateTime.UtcNow - t0).TotalMilliseconds > Constants.MaxEmitTimeMs)
             {
                 Logger.Warning("Emitter queue is too long, dropping packets...");
                 ReceiveQueue.Clear();
                 break;
             }
+            if (!EmitterQueue.TryDequeue(out var tsk)) break;
 
             tsk.Remote.Send(tsk.Buffer, tsk.Buffer.Length);
         }
@@ -155,13 +163,14 @@ public static class Request
         var t0 = DateTime.UtcNow;
         while (true)
         {
-            if (!ReceiveQueue.TryDequeue(out var tsk)) break;
             if ((DateTime.UtcNow - t0).TotalMilliseconds > Constants.MaxReceiveTimeMs)
             {
                 Logger.Warning("Receive queue is too long, dropping packets...");
                 ReceiveQueue.Clear();
                 break;
             }
+
+            if (!ReceiveQueue.TryDequeue(out var tsk)) break;
 
             var client = ClientManager.Get(tsk.Remote);
             if (client == null)
@@ -173,7 +182,11 @@ public static class Request
             client.LastSeen = DateTime.UtcNow;
 
             var handlers = PacketDispatcher.GetHandlers(tsk.Type);
-            if (handlers.Length == 0) continue;
+            if (handlers.Length == 0)
+            {
+                Logger.Debug($"[Request.Receive] No handlers found for {tsk.Type}");
+                continue;
+            }
 
             var buf = new Buffer(tsk.Payload);
             var len = buf.ReadUShort();
@@ -194,8 +207,9 @@ public static class Request
     {
         var now = DateTime.UtcNow;
         var timeout = Config.Load().GetConnectionTimeout();
-        foreach (var client in ClientManager.Clients.Where(client => !((now - client.LastSeen).TotalSeconds < timeout)))
-            client.OnTimeout();
+        foreach (var client in ClientManager.Clients.ToArray())
+            if ((now - client.LastSeen).TotalSeconds >= timeout)
+                client.Timeout();
     }
 
     #endregion

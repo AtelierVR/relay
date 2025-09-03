@@ -3,7 +3,7 @@ namespace Relay.Players;
 public static class PlayerExtensions
 {
     public static bool IsReady(this Player player)
-        => player != null && player.Status == PlayerStatus.Ready;
+        => player is { Status: > PlayerStatus.Preparing };
 
     public static bool IsAllowed(this Player player, Player target)
         => player != null

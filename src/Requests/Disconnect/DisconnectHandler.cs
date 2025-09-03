@@ -1,6 +1,7 @@
 ﻿using Relay.Clients;
 using Relay.Packets;
 using Relay.Priority;
+using Relay.Requests.Instances.Quit;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;
 
@@ -27,14 +28,11 @@ public class DisconnectHandler : Handler
         SendEvent(data.Client);
     }
 
-    public static void SendEvent(Client client, string? reason = null)
+    public static void SendEvent(Client client, string? reason = null, QuitType type = QuitType.Normal)
     {
         var buffer = Buffer.New();
         if (reason != null)
             buffer.Write(reason);
-        Request.SendBuffer(client, buffer, ResponseType.Disconnect);
-        client.IsHandshake = false;
-        client.OnDisconnect(reason);
-        ClientManager.Remove(client);
+        Request.SendBuffer(client, buffer, ResponseType.Disconnect, priority: EPriority.Critical);
     }
 }

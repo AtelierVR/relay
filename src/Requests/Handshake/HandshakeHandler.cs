@@ -36,7 +36,7 @@ public class HandshakeHandler : Handler {
 		response.Write(data.Client.Remote.Port);
 
 		var flags     = HandshakeFlags.None;
-		var master    = MasterServer.GetMasterAddress();
+		var master    = MasterServer.GetUsedAddress();
 		var hasMaster = !string.IsNullOrEmpty(master);
 
 		if (!hasMaster) flags |= HandshakeFlags.IsOffline;
@@ -47,7 +47,7 @@ public class HandshakeHandler : Handler {
 		response.Write(config.GetConnectionTimeout());
 		response.Write(config.GetKeepAliveInterval());
 
-		Request.SendBuffer(data.Client, response, ResponseType.Handshake, data.Uid);
+		Request.SendBuffer(data.Client, response, ResponseType.Handshake, data.Uid, EPriority.Critical);
 
 		Logger.Debug($"{data.Client} handshake");
 	}

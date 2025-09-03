@@ -48,7 +48,7 @@ public class StatusHandler : Handler {
 			instanceBuffer.Write(instance.Flags);
 			instanceBuffer.Write(instance.InternalId);
 			instanceBuffer.Write(instance.MasterId);
-			instanceBuffer.Write((ushort)instance.Players.Count);
+			instanceBuffer.Write((ushort)instance.GetPlayers().Length);
 			instanceBuffer.Write(instance.Capacity);
 
 			if (buffer.Length + instanceBuffer.Length > bytesPerPage || nb >= byte.MaxValue) {

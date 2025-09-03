@@ -1,7 +1,9 @@
 ﻿using Newtonsoft.Json.Linq;
 
-namespace Relay.Utils {
-	public class Config {
+namespace Relay.Utils
+{
+	public class Config
+	{
 		public static string GetPath()
 			=> Path.Combine(Environment.CurrentDirectory, "config.json");
 
@@ -9,23 +11,30 @@ namespace Relay.Utils {
 
 		private JObject _jsonObject = new JObject();
 
-		public static Config Load(bool force = false) {
+		public static Config Load(bool force = false)
+		{
 			if (Current != null && !force) return Current;
-			if (!File.Exists(GetPath())) {
+			if (!File.Exists(GetPath()))
+			{
 				Logger.Log("Config file not found, creating a new one...");
 				var initialConfig = HasEnv("initial_config") ? GetFromEnv<string>("initial_config") : null;
-				if (initialConfig != null && string.IsNullOrEmpty(initialConfig)) {
+				if (initialConfig != null && string.IsNullOrEmpty(initialConfig))
+				{
 					Logger.Log("Using initial config from environment variable...");
 					var obj = JObject.Parse(initialConfig);
 					Current = new Config { _jsonObject = obj }.Save();
-				} else {
+				}
+				else
+				{
 					Logger.Log("Using default config...");
 					Current = new Config().Save();
 				}
-			} else {
+			}
+			else
+			{
 				Logger.Log("Loading config file...");
 				var jsonString = File.ReadAllText(GetPath());
-				var config     = new Config() { _jsonObject = JObject.Parse(jsonString) };
+				var config = new Config() { _jsonObject = JObject.Parse(jsonString) };
 				Current = config;
 			}
 
@@ -35,14 +44,16 @@ namespace Relay.Utils {
 		public bool Has(string propertyName)
 			=> _jsonObject[propertyName] != null;
 
-		public T? Get<T>(string propertyName, T? defaultValue = default) {
+		public T? Get<T>(string propertyName, T? defaultValue = default)
+		{
 			var token = _jsonObject[propertyName];
 			return token == null
 				? defaultValue
 				: token.ToObject<T>();
 		}
 
-		public static T? GetFromEnv<T>(string key) {
+		public static T? GetFromEnv<T>(string key)
+		{
 			var value = Environment.GetEnvironmentVariable($"nox_{key}".ToUpper());
 			if (value == null) return default;
 			return (T)Convert.ChangeType(value, typeof(T));
@@ -54,7 +65,8 @@ namespace Relay.Utils {
 		public void Set<T>(string propertyName, T? value)
 			=> _jsonObject[propertyName] = value == null ? null : JToken.FromObject(value);
 
-		public Config Save() {
+		public Config Save()
+		{
 			File.WriteAllText(GetPath(), _jsonObject.ToString());
 			return this;
 		}
@@ -101,7 +113,7 @@ namespace Relay.Utils {
 					: Constants.MaxInstances
 				);
 
-		public string GetUseAddress()
+		public string GetUsedAddress()
 			=> Get<string>("use_address") ?? GetFromEnv<string>("use_address") ?? Constants.UseAddress;
 	}
 }

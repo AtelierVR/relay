@@ -9,7 +9,7 @@ public class LatencyHandler : Handler
 {
     protected override void OnSetup()
     {
-        PacketPriorityManager.SetMinimumPriority(RequestType.Latency, EPriority.Normal);
+        PacketPriorityManager.SetMinimumPriority(RequestType.Latency, EPriority.High);
         PacketDispatcher.RegisterHandler(RequestType.Latency, OnLatency);
     }
 
@@ -21,6 +21,6 @@ public class LatencyHandler : Handler
         var response = Buffer.New();
         response.Write(data.Payload.ReadDateTime());
         response.Write(DateTime.UtcNow);
-        Request.SendBuffer(data.Client, response, ResponseType.Latency, data.Uid);
+        Request.SendBuffer(data.Client, response, ResponseType.Latency, data.Uid, EPriority.High);
     }
 }

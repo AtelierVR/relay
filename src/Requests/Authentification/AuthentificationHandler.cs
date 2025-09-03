@@ -29,7 +29,7 @@ public class AuthentificationHandler : Handler
 			var response = Buffer.New();
 			response.Write(AuthResult.Unknown);
 			response.Write("This server does not support unauthenticated access.");
-			Request.SendBuffer(data.Client, response, ResponseType.Authentification, data.Uid);
+			Request.SendBuffer(data.Client, response, ResponseType.Authentification, data.Uid, EPriority.High);
 			return;
 		}
 
@@ -39,7 +39,7 @@ public class AuthentificationHandler : Handler
 			var response = Buffer.New();
 			response.Write(AuthResult.InvalidToken);
 			response.Write("Access token is missing.");
-			Request.SendBuffer(data.Client, response, ResponseType.Authentification, data.Uid);
+			Request.SendBuffer(data.Client, response, ResponseType.Authentification, data.Uid, EPriority.High);
 			return;
 		}
 
@@ -76,7 +76,7 @@ public class AuthentificationHandler : Handler
 			Logger.Debug($"{client} authentification error {response.error}");
 			buffer.Write(AuthResult.MasterError);
 			buffer.Write(response.error.message);
-			Request.SendBuffer(client, buffer, ResponseType.Authentification, uid);
+			Request.SendBuffer(client, buffer, ResponseType.Authentification, uid, EPriority.High);
 			client.User = null;
 			return;
 		}
@@ -118,6 +118,6 @@ public class AuthentificationHandler : Handler
 			Logger.Debug($"{client} authentification error unknown");
 		}
 
-		Request.SendBuffer(client, buffer, ResponseType.Authentification, uid);
+		Request.SendBuffer(client, buffer, ResponseType.Authentification, uid, EPriority.High);
 	}
 }

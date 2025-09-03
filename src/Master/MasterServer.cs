@@ -17,9 +17,10 @@ namespace Relay.Master
 			=> _lastUpdate = DateTime.MinValue;
 
 		public static string GetMasterAddress()
-			=> Config.Load()
-				.GetMasterGateway()
-				.Replace(@"https?://", "");
+			=> Config.Load().GetMasterGateway();
+
+		public static string GetUsedAddress()
+		=> Config.Load().GetUsedAddress();
 
 		public static string GetToken()
 			=> Config.Load().GetToken();
@@ -79,11 +80,11 @@ namespace Relay.Master
 						platform = client.Platform.ToString().ToLower(),
 						engine = client.Engine.ToString().ToLower(),
 						last_seen = (ulong)client.LastSeen.ToUnixTimeMilliseconds(),
-						user = client.User != null
+						user = client.IsAuthenticated
 							? new RequestUser
 							{
-								id = client.User.Value.Id,
-								address = client.User.Value.Address
+								id = client.User!.Value.Id,
+								address = client.User!.Value.Address
 							}
 							: null,
 					}
@@ -98,7 +99,7 @@ namespace Relay.Master
 						master_id = instance.MasterId,
 						flags = (uint)instance.Flags,
 						max_players = instance.Capacity,
-						players = [.. instance.Players.ToArray()
+						players = [.. instance.GetPlayers()
 							.Select(
 								player => new RequestPlayer
 								{
@@ -110,14 +111,14 @@ namespace Relay.Master
 									created_at = (ulong)player.CreatedAt.ToUnixTimeMilliseconds()
 								}
 							)]
-                    }
+					}
 				)
 				.ToArray();
 
 			var request = new RequestUpdate
 			{
 				port = Config.Load().GetPort(),
-				use_address = Config.Load().GetUseAddress(),
+				use_address = Config.Load().GetUsedAddress(),
 				max_instances = GetMaxInstances(),
 				clients = clients,
 				instances = instances

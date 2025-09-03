@@ -10,7 +10,7 @@
 		public const byte   MaxInstances      = 3;
 		public const ushort MinUpdateTime     = 100;
 		public const ushort DefaultUpdateTime = 100;
-		public const double MaxEmitTimeMs     = 50d;
+		public const double MaxEmitTimeMs     = 1000d;
 		public const double MaxReceiveTimeMs  = 50d;
 		public const bool   Debug             = true;
 	}

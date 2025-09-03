@@ -4,17 +4,18 @@ using Relay.Utils;
 
 namespace Relay.Instances;
 
-public class Instance {
-	public readonly byte              InternalId;
-	public          uint              MasterId;
-	public          InstanceFlags     Flags;
-	public          ushort            Capacity  = 0;
-	public          byte              Tps       = 24;
-	public          float             Threshold = 0.001f;
-	private         List<UserModerated> _modereds = [];
-	public          World?            World;
-	public          List<Player>      Players    = new();
-	public          List<ViewGroup>   ViewGroups = new();
+public class Instance
+{
+	public readonly byte InternalId;
+	public uint MasterId;
+	public InstanceFlags Flags;
+	public ushort Capacity = 0;
+	public byte Tps = 24;
+	public float Threshold = 0.001f;
+	private List<UserModerated> _modereds = [];
+	public World? World;
+	private readonly List<Player> Players = [];
+	public List<ViewGroup> ViewGroups = new();
 
 	public UserModerated? GetModerated(uint userId, string address)
 		=> _modereds.FirstOrDefault(m => m.UserId == userId && m.Address == address);
@@ -27,7 +28,8 @@ public class Instance {
 	/// <summary>
 	/// Récupère ou crée un groupe automatique pour un utilisateur dans cette instance
 	/// </summary>
-	public ViewGroup GetOrCreateViewGroup(ushort playerId) {
+	public ViewGroup GetOrCreateViewGroup(ushort playerId)
+	{
 		var existingGroup = ViewGroups.FirstOrDefault(g => g.Id == playerId);
 		if (existingGroup != null)
 			return existingGroup;
@@ -41,7 +43,8 @@ public class Instance {
 	/// <summary>
 	/// Crée un nouveau groupe personnalisé dans cette instance
 	/// </summary>
-	public ViewGroup CreateCustomGroup(string? name = null) {
+	public ViewGroup CreateCustomGroup(string? name = null)
+	{
 		var group = new ViewGroup(GetNextViewGroupId(), name);
 		ViewGroups.Add(group);
 		return group;
@@ -56,12 +59,14 @@ public class Instance {
 	/// <summary>
 	/// Supprime un groupe personnalisé de cette instance
 	/// </summary>
-	public bool RemoveViewGroup(uint groupId) {
+	public bool RemoveViewGroup(uint groupId)
+	{
 		if (groupId <= ushort.MaxValue)
 			return false; // Ne peut pas supprimer un groupe automatique
 
 		var group = ViewGroups.FirstOrDefault(g => g.Id == groupId);
-		if (group != null && ViewGroups.Remove(group)) {
+		if (group != null && ViewGroups.Remove(group))
+		{
 			// Nettoyer les références à ce groupe dans les autres groupes
 			foreach (var otherGroup in ViewGroups)
 				otherGroup.RemoveVisibleGroup(groupId);
@@ -79,12 +84,14 @@ public class Instance {
 	/// <summary>
 	/// Vérifie si un utilisateur peut voir un autre utilisateur dans cette instance
 	/// </summary>
-	public bool CanUserSeeUser(ushort viewerId, ushort targetId) {
+	public bool CanUserSeeUser(ushort viewerId, ushort targetId)
+	{
 		if (viewerId == targetId)
 			return true;
 		var viewerGroups = GetUserGroups(viewerId).ToList();
 		var targetGroups = GetUserGroups(targetId).ToList();
-		foreach (var viewerGroupId in viewerGroups) {
+		foreach (var viewerGroupId in viewerGroups)
+		{
 			var viewerGroup = GetViewGroup(viewerGroupId);
 			if (viewerGroup != null && targetGroups.Any(gtid => viewerGroup.CanSeeGroup(gtid)))
 				return true;
@@ -97,7 +104,8 @@ public class Instance {
 	/// <summary>
 	/// Nettoie les données d'un utilisateur dans cette instance
 	/// </summary>
-	public void CleanupUser(ushort playerId) {
+	public void CleanupUser(ushort playerId)
+	{
 		foreach (var group in ViewGroups)
 			group.RemoveMember(playerId);
 		var autoGroup = ViewGroups.FirstOrDefault(g => g.Id == playerId);
@@ -109,15 +117,20 @@ public class Instance {
 
 	private string? _password;
 
-	public string? Password {
+	public string? Password
+	{
 		get => Flags.HasFlag(InstanceFlags.UsePassword) ? _password : null;
-		set {
-			if (string.IsNullOrEmpty(value)) {
-				Flags     &= ~InstanceFlags.UsePassword;
-				_password =  null;
-			} else {
-				Flags     |= InstanceFlags.UsePassword;
-				_password =  value;
+		set
+		{
+			if (string.IsNullOrEmpty(value))
+			{
+				Flags &= ~InstanceFlags.UsePassword;
+				_password = null;
+			}
+			else
+			{
+				Flags |= InstanceFlags.UsePassword;
+				_password = value;
 			}
 		}
 	}
@@ -125,8 +138,9 @@ public class Instance {
 	public bool VerifyPassword(string password)
 		=> string.IsNullOrEmpty(Password) || (!string.IsNullOrEmpty(password) && Hashing.Verify(password, Password));
 
-	public Instance() {
-		Flags      = InstanceFlags.None;
+	public Instance()
+	{
+		Flags = InstanceFlags.None;
 		InternalId = InstanceManager.GetNextInternalId();
 		InstanceManager.Add(this);
 	}
@@ -134,14 +148,16 @@ public class Instance {
 	public override string ToString()
 		=> $"{GetType().Name}[InternalId={InternalId}, MasterId={MasterId}, PlayerCount={Players.Count}/{Capacity}]";
 
-	internal ushort GetNextPlayerId() {
+	internal ushort GetNextPlayerId()
+	{
 		ushort id = 0;
 		while (Players.Exists(p => p.Id == id))
 			id++;
 		return id;
 	}
 
-	internal uint GetNextViewGroupId() {
+	internal uint GetNextViewGroupId()
+	{
 		uint id = ushort.MaxValue + 1;
 		while (ViewGroups.Exists(g => g.Id == id))
 			id++;
@@ -150,4 +166,19 @@ public class Instance {
 
 	public bool IsFull()
 		=> Capacity != 0 && Players.Count >= Capacity && !Flags.HasFlag(InstanceFlags.AllowOverload);
+
+	public void AddPlayer(Player player)
+	{
+		Players.Add(player);
+		GetOrCreateViewGroup(player.Id);
+	}
+
+	public void RemovePlayer(Player player)
+	{
+		Players.Remove(player);
+		CleanupUser(player.Id);
+	}
+
+	public Player[] GetPlayers()
+		=> [.. Players];
 }

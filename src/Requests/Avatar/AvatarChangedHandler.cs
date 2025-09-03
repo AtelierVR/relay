@@ -26,7 +26,9 @@ public class AvatarChangedHandler : Handler
             return;
         }
 
-        var player = instance.Players.Find(p => p.ClientId == data.Client.Id);
+        var players = instance.GetPlayers();
+
+        var player = players.FirstOrDefault(p => p.ClientId == data.Client.Id);
         if (player == null || !player.IsReady())
         {
             SendResponse(data.Client, iid, data.Uid, AvatarChangedResult.Failed, "You are not a valid player");
@@ -38,7 +40,7 @@ public class AvatarChangedHandler : Handler
 
         if (pid != ushort.MaxValue && player.Id != pid)
         {
-            opPlayer = instance.Players.FirstOrDefault(p => p.Id == pid);
+            opPlayer = players.FirstOrDefault(p => p.Id == pid);
             if (opPlayer == null || !opPlayer.IsReady())
             {
                 SendResponse(data.Client, iid, data.Uid, AvatarChangedResult.Failed, "Player not found");
@@ -63,8 +65,8 @@ public class AvatarChangedHandler : Handler
         Logger.Debug($"{opPlayer} changed avatar to {opPlayer.Avatar}");
 
         SendResponse(data.Client, iid, data.Uid, AvatarChangedResult.Success);
-        foreach (var c in instance.Players.Select(p => p.Client).Where(c => c != null && c.Id != data.Client.Id))
-            SendAvatarChanged(c!, iid, opPlayer.Id, opPlayer.Avatar);
+        foreach (var c in players.Where(c => c.ClientId != data.Client.Id))
+            SendAvatarChanged(c.Client, iid, opPlayer.Id, opPlayer.Avatar);
     }
 
     public static void SendResponse(Client client, byte internalId, ushort uid, AvatarChangedResult result, string? reason = null)
@@ -74,7 +76,7 @@ public class AvatarChangedHandler : Handler
         response.Write(result);
         if (reason != null)
             response.Write(reason);
-        Request.SendBuffer(client, response, ResponseType.AvatarChanged, uid);
+        Request.SendBuffer(client, response, ResponseType.AvatarChanged, uid, EPriority.High);
     }
 
     public static void SendAvatarChanged(Client client, byte instanceId, ushort playerId, Avatars.Avatar avatar, ushort uid = ushort.MinValue)
@@ -86,6 +88,6 @@ public class AvatarChangedHandler : Handler
         buffer.Write(avatar.Id);
         buffer.Write(avatar.Server);
         buffer.Write(avatar.Version);
-        Request.SendBuffer(client, buffer, ResponseType.AvatarChanged, uid);
+        Request.SendBuffer(client, buffer, ResponseType.AvatarChanged, uid, EPriority.Normal);
     }
 }
