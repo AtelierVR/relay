@@ -59,7 +59,8 @@ public class AvatarChangedHandler : Handler
         {
             Id = data.Payload.ReadUInt(),
             Server = data.Payload.ReadString() ?? string.Empty,
-            Version = data.Payload.ReadUShort()
+            Version = data.Payload.ReadUShort(),
+            Parameters = []
         };
 
         Logger.Debug($"{opPlayer} changed avatar to {opPlayer.Avatar}");
