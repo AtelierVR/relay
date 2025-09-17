@@ -6,20 +6,20 @@ using Relay.Priority;
 using Relay.Utils;
 using Buffer = Relay.Utils.Buffer;
 
-namespace Relay.Requests.Status;
+namespace Relay.Requests.Sessions;
 
-public class StatusHandler : Handler {
+public class SessionsHandler : Handler {
 	protected override void OnSetup() {
-		PacketPriorityManager.SetMinimumPriority(RequestType.Status, EPriority.Normal);
-		PacketDispatcher.RegisterHandler(RequestType.Status, OnStatus);
+		PacketPriorityManager.SetMinimumPriority(RequestType.Sessions, EPriority.Normal);
+		PacketDispatcher.RegisterHandler(RequestType.Sessions, OnSessions);
 	}
 
-	private static void OnStatus(PacketData data) {
+	private static void OnSessions(PacketData data) {
 		// Reject if not handshake
 		if (!data.Client.IsHandshake) return;
 
 		var pagination = data.Payload.ReadByte();
-        Logger.Debug($"{data.Client} requested status page {pagination}");
+        Logger.Debug($"{data.Client} requested sessions page {pagination}");
 
 		var response  = Buffer.New();
 		var pages = GetPages(Constants.MaxPacketSize - 2);
@@ -32,7 +32,7 @@ public class StatusHandler : Handler {
 
         Logger.Debug($"{response}");
 
-		Request.SendBuffer(data.Client, response, ResponseType.Status, data.Uid);
+		Request.SendBuffer(data.Client, response, ResponseType.Sessions, data.Uid);
 	}
 
 

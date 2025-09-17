@@ -40,7 +40,7 @@
 		AvatarChanged = 0x0D,
 		ServerConfig = 0x0E,
 		AvatarParams = 0x0F,
-		Status = 0x11,
+		Sessions = 0x11,
 	}
 
 	public enum ResponseType : byte
@@ -67,7 +67,7 @@
 		AvatarParams = 0x0F,
 		Join = 0x10,
 		Leave = 0x11,
-		Status = 0x12,
+		Sessions = 0x12,
 	}
 
 	public class Messages
