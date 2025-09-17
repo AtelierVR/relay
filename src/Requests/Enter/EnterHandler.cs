@@ -51,8 +51,8 @@ public class EnterHandler : Handler
             var buffer = Buffer.New();
             buffer.Write(iid);
             buffer.Write(EnterResult.Blacklisted);
-            buffer.Write(reason ?? string.Empty);
             buffer.Write(expiresAt ?? DateTimeOffset.MinValue);
+            buffer.Write(reason ?? string.Empty);
             Request.SendBuffer(data.Client, buffer, ResponseType.Enter, data.Uid, EPriority.High);
             return;
         }
