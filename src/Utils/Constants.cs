@@ -9,6 +9,7 @@
 		public const string MasterGateway = "http://127.0.0.1:53032";
 		public const ushort ConnectionTimeout = 15;
 		public const ushort KeepAliveInterval = 5;
+		public const ushort SegmentationTimeout = 30; // seconds
 		public const byte MaxInstances = 3;
 		public const ushort MinUpdateTime = 100;
 		public const ushort DefaultUpdateTime = 100;

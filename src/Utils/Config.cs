@@ -98,6 +98,15 @@ namespace Relay.Utils
 					: Constants.KeepAliveInterval
 				);
 
+		public ushort GetSegmentationTimeout()
+			=> Has("segmentation_timeout")
+				? Get<ushort>("segmentation_timeout")
+				: (
+				HasEnv("segmentation_timeout")
+					? GetFromEnv<ushort>("segmentation_timeout")
+					: Constants.SegmentationTimeout
+				);
+
 		public string GetMasterGateway()
 			=> Get<string>("master_gateway") ?? GetFromEnv<string>("master_gateway") ?? Constants.MasterGateway;
 

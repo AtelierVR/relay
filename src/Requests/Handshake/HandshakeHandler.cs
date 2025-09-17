@@ -46,6 +46,7 @@ public class HandshakeHandler : Handler {
 		response.Write(Constants.MaxPacketSize);
 		response.Write(config.GetConnectionTimeout());
 		response.Write(config.GetKeepAliveInterval());
+		response.Write(config.GetSegmentationTimeout());
 
 		Request.SendBuffer(data.Client, response, ResponseType.Handshake, data.Uid, EPriority.Critical);
 
