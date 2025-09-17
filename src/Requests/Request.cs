@@ -1,4 +1,5 @@
-﻿using Relay.Clients;
+﻿using System.Net;
+using Relay.Clients;
 using Relay.Packets;
 using Relay.Priority;
 using Relay.Utils;
@@ -27,8 +28,12 @@ public static class Request
         var typ = (RequestType)buf[4];
         var pry = PacketPriorityManager.GetPriority(typ);
         var tsk = new ReceivePacket(remote, typ, buf, pry);
-        if (!ReceiveQueue.TryEnqueue(tsk))
-            Logger.Warning($"[Request.OnBuffer] Failed to enqueue packet for {remote}");
+        if (Handling)
+        {
+            if (!ReceiveQueue.TryEnqueue(tsk))
+                Logger.Warning($"[Request.OnBuffer] Failed to enqueue packet for {remote}");
+        }
+        else DirectReceive(tsk);
     }
 
     #endregion
@@ -54,8 +59,12 @@ public static class Request
         buf.Write(type);
         buf.Write(buffer);
         var tsk = new EmitterPacket(remote, buf.ToBuffer(), priority);
-        if (!EmitterQueue.TryEnqueue(tsk))
-            Logger.Warning($"[Request.SendBuffer] Failed to enqueue packet for {remote}");
+        if (Handling)
+        {
+            if (!EmitterQueue.TryEnqueue(tsk))
+                Logger.Warning($"[Request.SendBuffer] Failed to enqueue packet for {remote}");
+        }
+        else DirectSend(tsk);
     }
 
     #endregion
@@ -63,6 +72,8 @@ public static class Request
     #region Handler Loops
 
     private static CancellationTokenSource? _cts;
+
+    public static bool Handling = false;
 
     public static void Start()
     {
@@ -74,50 +85,55 @@ public static class Request
         var cpus = Environment.ProcessorCount / 4;
         cpus = Math.Max(cpus, 1);
 
-        Logger.Debug($"[Request] Starting {cpus} request handler(s)...");
+        if (Handling)
+        {
 
-        for (var i = 0; i < cpus; i++)
-            Task.Run(
-                async () =>
-                {
-                    while (!token.IsCancellationRequested)
+            Logger.Debug($"[Request] Starting {cpus} request handler(s)...");
+
+            for (var i = 0; i < cpus; i++)
+                Task.Run(
+                    async () =>
                     {
-                        try
+                        while (!token.IsCancellationRequested)
                         {
-                            Emit();
+                            try
+                            {
+                                Emit();
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.Error($"[Request.Emit] {ex}");
+                            }
+
+                            await Task.Delay(1, token);
                         }
-                        catch (Exception ex)
-                        {
-                            Logger.Error($"[Request.Emit] {ex}");
-                        }
 
-                        await Task.Delay(1, token);
-                    }
+                        Logger.Debug($"[Request] Stopped emitting.");
+                    }, token);
 
-                    Logger.Debug($"[Request] Stopped emitting.");
-                }, token);
-
-        for (var i = 0; i < cpus; i++)
-            Task.Run(
-                async () =>
-                {
-                    while (!token.IsCancellationRequested)
+            for (var i = 0; i < cpus; i++)
+                Task.Run(
+                    async () =>
                     {
-                        try
+                        while (!token.IsCancellationRequested)
                         {
-                            Receive();
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.Error($"[Request.Receive] {ex}");
+                            try
+                            {
+                                Receive();
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.Error($"[Request.Receive] {ex}");
+                            }
+
+                            await Task.Delay(1, token);
                         }
 
-                        await Task.Delay(1, token);
-                    }
-
-                    Logger.Debug("[Request] Stopped receiving.");
-                }, token
-            );
+                        Logger.Debug("[Request] Stopped receiving.");
+                    }, token
+                );
+        }
+        else Logger.Debug("[Request] Skipping request handlers...");
 
         Task.Run(
             async () =>
@@ -154,7 +170,44 @@ public static class Request
             }
             if (!EmitterQueue.TryDequeue(out var tsk)) break;
 
-            tsk.Remote.Send(tsk.Buffer, tsk.Buffer.Length);
+            DirectSend(tsk);
+        }
+    }
+
+    private static void DirectSend(EmitterPacket tsk)
+    {
+        tsk.Remote.Send(tsk.Buffer, tsk.Buffer.Length);
+    }
+
+    private static void DirectReceive(ReceivePacket tsk)
+    {
+        var client = ClientManager.Get(tsk.Remote);
+        if (client == null)
+        {
+            client = new Client(tsk.Remote);
+            client.OnConnect();
+        }
+
+        client.LastSeen = DateTime.UtcNow;
+
+        var handlers = PacketDispatcher.GetHandlers(tsk.Type);
+        if (handlers.Length == 0)
+        {
+            Logger.Debug($"[Request.Receive] No handlers found for {tsk.Type}");
+            return;
+        }
+
+        var buf = new Buffer(tsk.Payload);
+        var len = buf.ReadUShort();
+        var uid = buf.ReadUShort();
+        var typ = buf.ReadEnum<RequestType>();
+
+        var data = new PacketData(len, uid, typ, buf, client);
+
+        foreach (var handler in handlers)
+        {
+            data.Payload.Goto(5);
+            handler(data);
         }
     }
 
@@ -172,34 +225,7 @@ public static class Request
 
             if (!ReceiveQueue.TryDequeue(out var tsk)) break;
 
-            var client = ClientManager.Get(tsk.Remote);
-            if (client == null)
-            {
-                client = new Client(tsk.Remote);
-                client.OnConnect();
-            }
-
-            client.LastSeen = DateTime.UtcNow;
-
-            var handlers = PacketDispatcher.GetHandlers(tsk.Type);
-            if (handlers.Length == 0)
-            {
-                Logger.Debug($"[Request.Receive] No handlers found for {tsk.Type}");
-                continue;
-            }
-
-            var buf = new Buffer(tsk.Payload);
-            var len = buf.ReadUShort();
-            var uid = buf.ReadUShort();
-            var typ = buf.ReadEnum<RequestType>();
-
-            var data = new PacketData(len, uid, typ, buf, client);
-
-            foreach (var handler in handlers)
-            {
-                data.Payload.Goto(5);
-                handler(data);
-            }
+            DirectReceive(tsk);
         }
     }
 
