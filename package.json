@@ -1,0 +1,15 @@
+{
+  "name": "nox-relay-rs",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "cargo build && .\\target\\debug\\nox-relay.exe",
+    "build": "cargo build --release",
+    "test": "cargo test",
+    "compose": "docker build . -t nox-relay-rs -t hactazia/nox-relay-rs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

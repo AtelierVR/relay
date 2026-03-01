@@ -1,0 +1,13 @@
+services:
+  relay:
+    image: hactazia/nox-relay-rs
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "23032:23032/udp"
+    volumes:
+      - ./config.json:/app/config.json:ro
+    environment:
+      - NOX_PORT=23032
+    restart: unless-stopped
