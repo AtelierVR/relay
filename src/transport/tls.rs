@@ -35,7 +35,13 @@ pub fn make_server_config(san_addresses: &[&str]) -> Result<quinn::ServerConfig>
     let quic_server_config =
         quinn::crypto::rustls::QuicServerConfig::try_from(Arc::new(tls_config))?;
 
-    Ok(quinn::ServerConfig::with_crypto(Arc::new(
-        quic_server_config,
-    )))
+    // Enable QUIC datagrams for broadcasts
+    let mut transport = quinn::TransportConfig::default();
+    transport.datagram_receive_buffer_size(Some(65536));  // 64KB buffer for datagrams
+    transport.datagram_send_buffer_size(65536);
+    
+    let mut server_config = quinn::ServerConfig::with_crypto(Arc::new(quic_server_config));
+    server_config.transport_config(Arc::new(transport));
+
+    Ok(server_config)
 }

@@ -27,7 +27,7 @@ pub async fn handle_connection(state: Arc<AppState>, conn: Connection) -> Result
 
     // Allocate client ID and register a new client.
     let client_id = state.next_client_id();
-    let (client_arc, mut push_rx) = new_client(client_id);
+    let (client_arc, mut push_rx) = new_client(client_id, Arc::new(conn.clone()));
     {
         let c = client_arc.write();
         // Store the remote address string for relay_extensions.

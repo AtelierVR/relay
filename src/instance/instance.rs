@@ -288,23 +288,43 @@ impl Instance {
             .iter()
             .find(|tier| player_count <= tier.max_players)
             .map(|tier| tier.tps_factor)
-            .unwrap_or(0.60); // Fallback if no tier matches
+            .unwrap_or(0.50); // Fallback if no tier matches
 
         // Factor 2: Performance (tick duration vs budget)
         let tick_budget = 1000.0 / self.tps as f32;
         let perf_factor = if self.last_tick_duration > tick_budget * config.perf_threshold {
             // Exceeded threshold, reduce proportionally
-            (tick_budget * config.perf_threshold / self.last_tick_duration).max(0.5)
+            let factor = (tick_budget * config.perf_threshold / self.last_tick_duration).max(0.4);
+            // If severely overloaded (>120% of threshold), apply additional penalty
+            if self.last_tick_duration > tick_budget * config.perf_threshold * 1.2 {
+                factor * 0.85 // Additional 15% reduction
+            } else {
+                factor
+            }
         } else {
             1.0
         };
 
-        // Combine factors with configured weights
-        let combined = player_factor * config.player_weight + perf_factor * config.perf_weight;
+        // Combine factors: use minimum when performance is bad (more aggressive)
+        let combined = if perf_factor < 0.85 {
+            // Performance is degrading, use the more restrictive factor
+            player_factor.min(perf_factor)
+        } else {
+            // Normal operation, use weighted average
+            player_factor * config.player_weight + perf_factor * config.perf_weight
+        };
 
         // Calculate effective values
         let new_tps = ((self.tps as f32 * combined).max(config.min_tps as f32) as u8).min(self.tps);
-        let new_threshold = self.threshold * (1.0 + (1.0 - combined) * 0.5);
+        
+        // Make threshold more aggressive under high load
+        let threshold_multiplier = if combined < 0.7 {
+            // Under heavy load, increase threshold more aggressively
+            1.0 + (1.0 - combined) * 0.8
+        } else {
+            1.0 + (1.0 - combined) * 0.5
+        };
+        let new_threshold = self.threshold * threshold_multiplier;
 
         // Check if values changed
         let changed = self.effective_tps != Some(new_tps)
@@ -333,15 +353,23 @@ impl Instance {
                     .iter()
                     .find(|tier| player_count <= tier.max_players)
                     .map(|tier| tier.tps_factor)
-                    .unwrap_or(0.60);
+                    .unwrap_or(0.50);
                 let tick_budget = 1000.0 / self.tps as f32;
                 let perf_factor = if self.last_tick_duration > tick_budget * config.perf_threshold {
-                    (tick_budget * config.perf_threshold / self.last_tick_duration).max(0.5)
+                    let factor = (tick_budget * config.perf_threshold / self.last_tick_duration).max(0.4);
+                    if self.last_tick_duration > tick_budget * config.perf_threshold * 1.2 {
+                        factor * 0.85
+                    } else {
+                        factor
+                    }
                 } else {
                     1.0
                 };
-                let combined =
-                    player_factor * config.player_weight + perf_factor * config.perf_weight;
+                let combined = if perf_factor < 0.85 {
+                    player_factor.min(perf_factor)
+                } else {
+                    player_factor * config.player_weight + perf_factor * config.perf_weight
+                };
                 ((self.tps as f32 * combined).max(config.min_tps as f32) as u8).min(self.tps)
             }
         }

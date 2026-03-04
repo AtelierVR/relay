@@ -233,12 +233,12 @@ fn build_enter_response(
     let tps = if player.custom_tps != 0 {
         player.custom_tps
     } else {
-        inst.tps
+        inst.get_effective_tps(&state.config.load_balancing)
     };
     let threshold = if player.custom_threshold != 0.0 {
         player.custom_threshold
     } else {
-        inst.threshold
+        inst.get_effective_threshold(&state.config.load_balancing)
     };
 
     let mut w = PacketWriter::new();

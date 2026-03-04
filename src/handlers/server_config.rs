@@ -18,7 +18,7 @@ use crate::{
     instance::{ArcInstance, InstanceFlags},
     proto::{
         buffer::{PacketReader, PacketWriter},
-        header::encode_stream_packet,
+        header::{encode_stream_packet, encode_datagram},
         packet_type::PacketType,
     },
 };
@@ -222,6 +222,62 @@ fn build_config_response(
     encode_stream_packet(uid, PacketType::ServerConfig, w.finish().as_ref())
 }
 
+/// Build a ServerConfig broadcast (datagram format, no length prefix)
+fn build_config_broadcast(
+    inst_arc: &ArcInstance,
+    iid: u8,
+    flags: ServerConfigFlags,
+    player_id: u16,
+    lb_config: &crate::config::LoadBalancingConfig,
+) -> Bytes {
+    let inst = inst_arc.read();
+    let (custom_tps, custom_threshold) = inst
+        .get_player(player_id)
+        .map(|p| (p.custom_tps, p.custom_threshold))
+        .unwrap_or((0, 0.0));
+
+    let mut w = PacketWriter::new();
+    w.write_u8(iid);
+    w.write_u8(ServerConfigResult::Change as u8);
+    w.write_u8(flags.bits());
+
+    if flags.contains(ServerConfigFlags::TPS) {
+        w.write_u8(if custom_tps != 0 {
+            custom_tps
+        } else {
+            inst.get_player_tps(player_id, lb_config)
+        });
+    }
+    if flags.contains(ServerConfigFlags::THRESHOLD) {
+        w.write_f32(if custom_threshold != 0.0 {
+            custom_threshold
+        } else {
+            inst.get_player_threshold(player_id, lb_config)
+        });
+    }
+    if flags.contains(ServerConfigFlags::CAPACITY) {
+        w.write_u16(inst.capacity);
+    }
+    if flags.contains(ServerConfigFlags::FLAGS) {
+        w.write_u32(inst.flags.bits());
+    }
+    if flags.contains(ServerConfigFlags::PASSWORD) {
+        w.write_u8(if inst.has_password() { 1 } else { 0 });
+    }
+    if flags.contains(ServerConfigFlags::MIN_TPS) {
+        w.write_u8(lb_config.min_tps);
+    }
+    if flags.contains(ServerConfigFlags::MAX_TPS) {
+        w.write_u8(inst.tps);
+    }
+    if flags.contains(ServerConfigFlags::LOAD_BALANCING) {
+        let enabled = inst.load_balancing_enabled.unwrap_or(lb_config.enabled);
+        w.write_u8(if enabled { 1 } else { 0 });
+    }
+
+    encode_datagram(0, PacketType::ServerConfig, w.finish().as_ref())
+}
+
 fn make_failure(uid: u16, iid: u8, reason: &str) -> Bytes {
     let mut w = PacketWriter::new();
     w.write_u8(iid);
@@ -259,17 +315,37 @@ pub fn broadcast_config_change(
         iid
     );
 
+    let mut sent_count = 0;
+    let mut failed_count = 0;
+    
     for (pid, cid) in &player_ids {
-        let resp = build_config_response(
+        let resp = build_config_broadcast(
             inst_arc,
             iid,
-            0, // uid=0 for broadcasts
             flags,
             *pid,
             &state.config.load_balancing,
         );
         if let Some(arc) = state.clients.get(*cid) {
-            arc.read().try_push(resp);
+            let sent = arc.read().send_datagram(resp.clone());
+            if sent {
+                sent_count += 1;
+                debug!(
+                    "[ServerConfig] Sent broadcast datagram to client {} (player {}), {} bytes",
+                    cid, pid, resp.len()
+                );
+            } else {
+                failed_count += 1;
+                tracing::warn!(
+                    "[ServerConfig] Failed to send broadcast datagram to client {}",
+                    cid
+                );
+            }
         }
     }
+    
+    debug!(
+        "[ServerConfig] Broadcast complete: {} sent, {} failed",
+        sent_count, failed_count
+    );
 }

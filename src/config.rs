@@ -143,41 +143,45 @@ fn default_lb_enabled() -> bool {
     true
 }
 fn default_lb_update_interval() -> u16 {
-    5 // seconds
+    3 // seconds - check more frequently for faster response
 }
 fn default_lb_min_tps() -> u8 {
     5
 }
 fn default_lb_player_weight() -> f32 {
-    0.6
+    0.5 // Balanced weight between player count and performance
 }
 fn default_lb_perf_weight() -> f32 {
-    0.4
+    0.5 // Equal weight to performance for faster reaction
 }
 fn default_lb_perf_threshold() -> f32 {
-    0.85 // 85% of tick budget
+    0.80 // 80% of tick budget - more aggressive
 }
 fn default_lb_tiers() -> Vec<LoadTier> {
     vec![
         LoadTier {
-            max_players: 15,
-            tps_factor: 1.0,
+            max_players: 10,
+            tps_factor: 1.0, // Full speed up to 10 players
         },
         LoadTier {
-            max_players: 30,
-            tps_factor: 0.95,
+            max_players: 20,
+            tps_factor: 0.90, // 90% at 20 players (~21.6 TPS)
+        },
+        LoadTier {
+            max_players: 35,
+            tps_factor: 0.80, // 80% at 35 players (~19.2 TPS)
         },
         LoadTier {
             max_players: 50,
-            tps_factor: 0.85,
+            tps_factor: 0.70, // 70% at 50 players (~16.8 TPS)
         },
         LoadTier {
-            max_players: 75,
-            tps_factor: 0.70,
+            max_players: 70,
+            tps_factor: 0.60, // 60% at 70 players (~14.4 TPS)
         },
         LoadTier {
             max_players: usize::MAX,
-            tps_factor: 0.60,
+            tps_factor: 0.50, // 50% beyond 70 players (~12 TPS)
         },
     ]
 }

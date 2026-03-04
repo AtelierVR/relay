@@ -4,6 +4,7 @@ use bytes::Bytes;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use quinn::Connection;
 
 use super::user::User;
 use crate::constants::CLIENT_TX_BUFFER;
@@ -40,10 +41,12 @@ pub struct Client {
     pub auth_state: AuthState,
     /// Outgoing packet sender (push path).
     pub tx: mpsc::Sender<Bytes>,
+    /// QUIC connection for sending datagrams.
+    pub conn: Arc<Connection>,
 }
 
 impl Client {
-    pub fn new(id: u16, tx: mpsc::Sender<Bytes>) -> Self {
+    pub fn new(id: u16, tx: mpsc::Sender<Bytes>, conn: Arc<Connection>) -> Self {
         Self {
             id,
             platform: String::new(),
@@ -53,6 +56,7 @@ impl Client {
             challenge: Vec::new(),
             auth_state: AuthState::None,
             tx,
+            conn,
         }
     }
 
@@ -72,14 +76,19 @@ impl Client {
     pub fn try_push(&self, packet: Bytes) -> bool {
         self.tx.try_send(packet).is_ok()
     }
+
+    /// Send a datagram (for broadcasts). Returns `true` on success.
+    pub fn send_datagram(&self, packet: Bytes) -> bool {
+        self.conn.send_datagram(packet).is_ok()
+    }
 }
 
 /// A thread-safe shared reference to a client.
 pub type ArcClient = Arc<RwLock<Client>>;
 
 /// Create a new `ArcClient` and return the push receiver as well.
-pub fn new_client(id: u16) -> (ArcClient, mpsc::Receiver<Bytes>) {
+pub fn new_client(id: u16, conn: Arc<Connection>) -> (ArcClient, mpsc::Receiver<Bytes>) {
     let (tx, rx) = mpsc::channel(CLIENT_TX_BUFFER);
-    let client = Arc::new(RwLock::new(Client::new(id, tx)));
+    let client = Arc::new(RwLock::new(Client::new(id, tx, conn)));
     (client, rx)
 }
