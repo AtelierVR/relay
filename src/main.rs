@@ -103,6 +103,15 @@ async fn main() -> Result<()> {
         });
     }
 
+    // ── Load Balancing periodic updates ────────────────────────────────────
+    {
+        let state_ref = Arc::clone(&state);
+        tokio::spawn(async move {
+            info!("[LoadBalance] Starting periodic update task...");
+            load_balancing_task(state_ref).await;
+        });
+    }
+
     // ── QUIC accept loop ──────────────────────────────────────────────────
     if let Err(e) = quic_server::run(state, endpoint).await {
         error!("[main] QUIC server error: {e}");
@@ -110,4 +119,41 @@ async fn main() -> Result<()> {
 
     info!("[Relay] NoxRelay stopped");
     Ok(())
+}
+
+/// Periodic task that updates load balancing and broadcasts changes
+async fn load_balancing_task(state: Arc<AppState>) {
+    use crate::handlers::server_config::{broadcast_config_change, ServerConfigFlags};
+    
+    loop {
+        // Wait for the configured update interval
+        let interval = state.config.load_balancing.update_interval as u64 * 1000;
+        tokio::time::sleep(tokio::time::Duration::from_millis(interval)).await;
+
+        // Update adaptive settings for each instance
+        for iid in 0..=254u8 {
+            if let Some(inst_arc) = state.instances.get(iid) {
+                let (new_tps, new_threshold, changed) = {
+                    let mut inst = inst_arc.write();
+                    inst.update_adaptive_settings(&state.config.load_balancing)
+                };
+
+                if changed {
+                    let player_count = inst_arc.read().player_count();
+                    info!(
+                        "[LoadBalance] Instance {} updated: TPS={} threshold={:.4} (players={})",
+                        iid, new_tps, new_threshold, player_count
+                    );
+
+                    // Broadcast the change to all players in the instance
+                    broadcast_config_change(
+                        &state,
+                        &inst_arc,
+                        iid,
+                        ServerConfigFlags::TPS | ServerConfigFlags::THRESHOLD,
+                    );
+                }
+            }
+        }
+    }
 }
