@@ -1,7 +1,4 @@
-use std::sync::{
-    atomic::AtomicU16,
-    Arc,
-};
+use std::sync::{atomic::AtomicU16, Arc};
 
 use bytes::Bytes;
 use parking_lot::Mutex;
@@ -163,8 +160,7 @@ pub fn broadcast_visible(
         inst.get_players()
             .iter()
             .filter(|p| {
-                (exclude != Some(p.client_id))
-                    && inst.can_user_see_user(p.id, target_player_id)
+                (exclude != Some(p.client_id)) && inst.can_user_see_user(p.id, target_player_id)
             })
             .map(|p| p.client_id)
             .collect()

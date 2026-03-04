@@ -114,7 +114,8 @@ fn on_entity_part(
     } else {
         let inst = inst_arc.read();
         inst.get_player(op_player_id)
-            .and_then(|p| p.transforms.get(rig_id)).copied()
+            .and_then(|p| p.transforms.get(rig_id))
+            .copied()
             .unwrap_or_default()
     };
 
