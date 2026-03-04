@@ -26,13 +26,16 @@ use crate::{
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct ServerConfigFlags: u8 {
-        const NONE      = 0x00;
-        const TPS       = 0x01;
-        const THRESHOLD = 0x02;
-        const CAPACITY  = 0x04;
-        const PASSWORD  = 0x08;
-        const FLAGS     = 0x10;
-        const ALL       = 0x1F;
+        const NONE                  = 0x00;
+        const TPS                   = 0x01;
+        const THRESHOLD             = 0x02;
+        const CAPACITY              = 0x04;
+        const PASSWORD              = 0x08;
+        const FLAGS                 = 0x10;
+        const MIN_TPS               = 0x20;
+        const MAX_TPS               = 0x40;
+        const LOAD_BALANCING        = 0x80;
+        const ALL                   = 0xFF;
     }
 }
 
@@ -107,6 +110,11 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         let f = InstanceFlags::from_bits_truncate(r.read_u32());
         inst_arc.write().flags = f;
         result_flags |= ServerConfigFlags::FLAGS;
+    }
+    if req_flags.contains(ServerConfigFlags::LOAD_BALANCING) {
+        let enabled = r.read_u8() != 0;
+        inst_arc.write().load_balancing_enabled = Some(enabled);
+        result_flags |= ServerConfigFlags::LOAD_BALANCING;
     }
 
     if result_flags.is_empty() {
@@ -200,6 +208,16 @@ fn build_config_response(
         // Just signal password presence (1 byte boolean).
         w.write_u8(if inst.has_password() { 1 } else { 0 });
     }
+    if flags.contains(ServerConfigFlags::MIN_TPS) {
+        w.write_u8(lb_config.min_tps);
+    }
+    if flags.contains(ServerConfigFlags::MAX_TPS) {
+        w.write_u8(inst.tps); // Max TPS is the base TPS of the instance
+    }
+    if flags.contains(ServerConfigFlags::LOAD_BALANCING) {
+        let enabled = inst.load_balancing_enabled.unwrap_or(lb_config.enabled);
+        w.write_u8(if enabled { 1 } else { 0 });
+    }
 
     encode_stream_packet(uid, PacketType::ServerConfig, w.finish().as_ref())
 }
@@ -210,4 +228,48 @@ fn make_failure(uid: u16, iid: u8, reason: &str) -> Bytes {
     w.write_u8(ServerConfigResult::Failure as u8);
     w.write_string(reason);
     encode_stream_packet(uid, PacketType::ServerConfig, w.finish().as_ref())
+}
+
+/// Broadcast ServerConfig change to all players in an instance.
+/// Should be called when adaptive load balancing changes TPS/threshold.
+pub fn broadcast_config_change(
+    state: &AppState,
+    inst_arc: &ArcInstance,
+    iid: u8,
+    flags: ServerConfigFlags,
+) {
+    use tracing::info;
+
+    let player_ids: Vec<(u16, u16)> = {
+        let inst = inst_arc.read();
+        inst.get_players()
+            .iter()
+            .map(|p| (p.id, p.client_id))
+            .collect()
+    };
+
+    if player_ids.is_empty() {
+        return;
+    }
+
+    info!(
+        "[ServerConfig] Broadcasting {:?} to {} players in instance {}",
+        flags,
+        player_ids.len(),
+        iid
+    );
+
+    for (pid, cid) in &player_ids {
+        let resp = build_config_response(
+            inst_arc,
+            iid,
+            0, // uid=0 for broadcasts
+            flags,
+            *pid,
+            &state.config.load_balancing,
+        );
+        if let Some(arc) = state.clients.get(*cid) {
+            arc.read().try_push(resp);
+        }
+    }
 }

@@ -40,6 +40,12 @@ pub struct Instance {
     next_view_group_id: u32,
     /// Duration of the last tick in milliseconds (for load balancing).
     pub last_tick_duration: f32,
+    /// Effective TPS calculated by load balancing (None = not yet calculated).
+    effective_tps: Option<u8>,
+    /// Effective threshold calculated by load balancing (None = not yet calculated).
+    effective_threshold: Option<f32>,
+    /// Load balancing enabled override (None = use global config).
+    pub load_balancing_enabled: Option<bool>,
 }
 
 impl Instance {
@@ -59,6 +65,9 @@ impl Instance {
             moderated: Vec::new(),
             next_view_group_id: u32::from(u16::MAX) + 1,
             last_tick_duration: 0.0,
+            effective_tps: None,
+            effective_threshold: None,
+            load_balancing_enabled: None,
         }
     }
 
@@ -255,13 +264,20 @@ impl Instance {
     // ── Load Balancing ────────────────────────────────────────────────────
 
     /// Calculate adaptive TPS and threshold based on load.
-    /// Returns (effective_tps, effective_threshold).
-    pub fn calculate_adaptive_settings(
-        &self,
+    /// Updates internal effective_tps/threshold and returns whether values changed.
+    /// Returns (effective_tps, effective_threshold, changed).
+    pub fn update_adaptive_settings(
+        &mut self,
         config: &crate::config::LoadBalancingConfig,
-    ) -> (u8, f32) {
-        if !config.enabled {
-            return (self.tps, self.threshold);
+    ) -> (u8, f32, bool) {
+        let enabled = self.load_balancing_enabled.unwrap_or(config.enabled);
+
+        if !enabled {
+            let changed = self.effective_tps != Some(self.tps)
+                || self.effective_threshold != Some(self.threshold);
+            self.effective_tps = Some(self.tps);
+            self.effective_threshold = Some(self.threshold);
+            return (self.tps, self.threshold, changed);
         }
 
         let player_count = self.players.len();
@@ -287,11 +303,58 @@ impl Instance {
         let combined = player_factor * config.player_weight + perf_factor * config.perf_weight;
 
         // Calculate effective values
-        let effective_tps =
-            ((self.tps as f32 * combined).max(config.min_tps as f32) as u8).min(self.tps);
-        let effective_threshold = self.threshold * (1.0 + (1.0 - combined) * 0.5);
+        let new_tps = ((self.tps as f32 * combined).max(config.min_tps as f32) as u8).min(self.tps);
+        let new_threshold = self.threshold * (1.0 + (1.0 - combined) * 0.5);
 
-        (effective_tps, effective_threshold)
+        // Check if values changed
+        let changed = self.effective_tps != Some(new_tps)
+            || (self.effective_threshold.is_some()
+                && (self.effective_threshold.unwrap() - new_threshold).abs() > 0.001);
+
+        self.effective_tps = Some(new_tps);
+        self.effective_threshold = Some(new_threshold);
+
+        (new_tps, new_threshold, changed)
+    }
+
+    /// Get current effective TPS (taking load balancing into account).
+    pub fn get_effective_tps(&self, config: &crate::config::LoadBalancingConfig) -> u8 {
+        if let Some(tps) = self.effective_tps {
+            tps
+        } else {
+            // Not yet calculated, compute now (but don't store)
+            let enabled = self.load_balancing_enabled.unwrap_or(config.enabled);
+            if !enabled {
+                self.tps
+            } else {
+                let player_count = self.players.len();
+                let player_factor = config
+                    .tiers
+                    .iter()
+                    .find(|tier| player_count <= tier.max_players)
+                    .map(|tier| tier.tps_factor)
+                    .unwrap_or(0.60);
+                let tick_budget = 1000.0 / self.tps as f32;
+                let perf_factor = if self.last_tick_duration > tick_budget * config.perf_threshold {
+                    (tick_budget * config.perf_threshold / self.last_tick_duration).max(0.5)
+                } else {
+                    1.0
+                };
+                let combined =
+                    player_factor * config.player_weight + perf_factor * config.perf_weight;
+                ((self.tps as f32 * combined).max(config.min_tps as f32) as u8).min(self.tps)
+            }
+        }
+    }
+
+    /// Get current effective threshold (taking load balancing into account).
+    pub fn get_effective_threshold(&self, _config: &crate::config::LoadBalancingConfig) -> f32 {
+        if let Some(threshold) = self.effective_threshold {
+            threshold
+        } else {
+            // Not yet calculated
+            self.threshold
+        }
     }
 
     /// Get the effective TPS for a specific player.
@@ -306,8 +369,7 @@ impl Instance {
                 return player.custom_tps;
             }
         }
-        let (tps, _) = self.calculate_adaptive_settings(config);
-        tps
+        self.get_effective_tps(config)
     }
 
     /// Get the effective threshold for a specific player.
@@ -322,8 +384,7 @@ impl Instance {
                 return player.custom_threshold;
             }
         }
-        let (_, threshold) = self.calculate_adaptive_settings(config);
-        threshold
+        self.get_effective_threshold(config)
     }
 }
 
