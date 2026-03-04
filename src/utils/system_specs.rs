@@ -1,4 +1,7 @@
-use std::{fs, sync::OnceLock, time::Instant};
+use std::{sync::OnceLock, time::Instant};
+
+#[cfg(target_os = "linux")]
+use std::fs;
 
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
