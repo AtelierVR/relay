@@ -33,6 +33,27 @@ Copy `config.example.json` to `config.json` and edit:
 }
 ```
 
+### Automatic Node Discovery
+
+The relay can automatically discover the node gateway URL from a domain name:
+
+```rust
+use noxrelay::utils::node_discovery::find_node_gateway;
+
+// Discovers via DNS TXT record (_nox.example.com) or /.well-known/nox
+let gateway = find_node_gateway("example.com").await?;
+// Returns: "https://example.com:3042" or "http://node.example.com"
+
+// Works with IP addresses
+let gateway = find_node_gateway("192.168.1.100:3042").await?;
+// Returns: "http://192.168.1.100:3042"
+```
+
+**DNS TXT Record Setup** (optional):
+```
+_nox.example.com. 300 IN TXT "mg=https://node.example.com:3042"
+```
+
 ## Docker
 
 ```bash
