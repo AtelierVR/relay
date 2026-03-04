@@ -1,5 +1,4 @@
 /// Helper utilities for hex formatting in logs.
-
 /// Formats a byte slice as a truncated hex string for logging.
 /// Shows first `max_bytes` bytes followed by "..." if truncated.
 pub fn to_hex_str(data: &[u8], max_bytes: usize) -> String {

@@ -30,16 +30,20 @@ pub fn make_state() -> AppState {
     });
     let clients = Arc::new(ClientManager::new());
     let instances = Arc::new(InstanceManager::new());
+    let log_buf = Arc::new(Mutex::new(LogBuffer::new(16)));
+    let log_forwarder = Arc::new(Mutex::new(None));
     AppState::new(
-        clients,
-        instances,
+        clients.clone(),
+        instances.clone(),
         Arc::new(MasterClient::new(
             config.clone(),
-            Arc::clone(&clients),
-            Arc::clone(&instances),
+            clients,
+            instances,
+            log_buf.clone(),
+            log_forwarder,
         )),
         config,
-        Arc::new(Mutex::new(LogBuffer::new(16))),
+        log_buf,
     )
 }
 

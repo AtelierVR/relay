@@ -13,7 +13,7 @@
 /// Broadcast Join: [iid][PlayerFlags][PlayerId][UserId][UserAddress][Display][CreatedAt][Engine][Platform]
 use bitflags::bitflags;
 use bytes::Bytes;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use crate::{
     handlers::context::AppState,

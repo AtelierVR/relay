@@ -93,7 +93,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
 }
 
 fn do_travel(
-    state: &AppState,
+    _state: &AppState,
     uid: u16,
     iid: u8,
     player_id: u16,
@@ -152,7 +152,7 @@ fn do_travel(
 }
 
 fn do_ready(
-    state: &AppState,
+    _state: &AppState,
     uid: u16,
     iid: u8,
     player_id: u16,

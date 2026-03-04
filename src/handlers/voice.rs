@@ -14,7 +14,7 @@ use crate::{
     },
 };
 
-pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) {
+pub async fn handle(state: &AppState, client_id: u16, _uid: u16, payload: Bytes) {
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();
@@ -38,7 +38,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     };
 
     let remaining = r.remaining();
-    if remaining == 0 || remaining % 2 != 0 {
+    if remaining == 0 || !remaining.is_multiple_of(2) {
         debug!(
             "[Voice] invalid sample length {} from client {}",
             remaining, client_id

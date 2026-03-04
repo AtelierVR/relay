@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod avatar;
 mod client;
 mod config;

@@ -74,11 +74,11 @@ struct MsgVisitor {
 }
 
 impl tracing::field::Visit for MsgVisitor {
-    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+    fn record_str(&mut self, _field: &tracing::field::Field, value: &str) {
         self.fields.push(value.to_string());
     }
 
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+    fn record_debug(&mut self, _field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         self.fields.push(format!("{:?}", value));
     }
 

@@ -10,7 +10,6 @@ use tracing::debug;
 use crate::{
     avatar::Avatar,
     handlers::context::AppState,
-    player::PlayerFlags,
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,

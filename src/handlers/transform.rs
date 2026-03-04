@@ -15,7 +15,6 @@ use tracing::debug;
 
 use crate::{
     handlers::context::AppState,
-    player::player_transform::PlayerTransforms,
     player::rig::{Transform, TransformFlags},
     proto::{
         buffer::{PacketReader, PacketWriter},
@@ -57,7 +56,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
 fn on_entity_part(
     state: &AppState,
     client_id: u16,
-    uid: u16,
+    _uid: u16,
     iid: u8,
     inst_arc: crate::instance::ArcInstance,
     mut r: PacketReader,
@@ -115,8 +114,7 @@ fn on_entity_part(
     } else {
         let inst = inst_arc.read();
         inst.get_player(op_player_id)
-            .and_then(|p| p.transforms.get(rig_id))
-            .map(|t| *t)
+            .and_then(|p| p.transforms.get(rig_id)).copied()
             .unwrap_or_default()
     };
 
@@ -164,7 +162,7 @@ fn on_entity_part(
 fn on_by_path(
     state: &AppState,
     client_id: u16,
-    uid: u16,
+    _uid: u16,
     iid: u8,
     inst_arc: crate::instance::ArcInstance,
     mut r: PacketReader,
@@ -192,11 +190,7 @@ fn on_by_path(
     };
 
     let flags = TransformFlags::from_bits_truncate(r.read_u8());
-    let mut tr = if flags.contains(TransformFlags::RESET) {
-        Transform::default()
-    } else {
-        Transform::default()
-    };
+    let mut tr = Transform::default();
     let active_flags = flags & !TransformFlags::RESET;
 
     if flags.contains(TransformFlags::POSITION) {

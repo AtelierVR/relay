@@ -58,9 +58,10 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     };
 
     // Paginate: bytes_per_page = MAX_PACKET_SIZE - header(5) - count(1) - page(1) - total(1) = MAX_PACKET_SIZE - 8
-    let bytes_per_page = (MAX_PACKET_SIZE as usize).saturating_sub(8);
+    let bytes_per_page = MAX_PACKET_SIZE.saturating_sub(8);
     let per_page = (bytes_per_page / RECORD_SIZE).max(1);
-    let pages: Vec<&[(u32, u8, u32, u16, u16)]> = records.chunks(per_page).collect();
+    type SessionRecordChunk = [(u32, u8, u32, u16, u16)];
+    let pages: Vec<&SessionRecordChunk> = records.chunks(per_page).collect();
     let total_pages = pages.len() as u8;
 
     let mut w = PacketWriter::new();

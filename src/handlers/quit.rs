@@ -1,12 +1,5 @@
-/// Quit packet handler — leaves an instance and broadcasts the departure.
-///
-/// Request:  [iid: u8][QuitType: u8](?[reason: string])
-/// Response (Quit): [iid: u8][QuitType: u8](?[reason: string])
-/// Broadcast (Leave) to each other ready player: [iid: u8][QuitType: u8][player_id: u16]
-///   ... also sends each other player's leave back to the departing player.
-use bitflags::bitflags;
 use bytes::Bytes;
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::{
     handlers::context::AppState,

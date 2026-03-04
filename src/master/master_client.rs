@@ -777,10 +777,10 @@ impl MasterClient {
 
     fn build_ws_url(master_gateway: &str) -> String {
         let clean = master_gateway.trim_end_matches('/');
-        if clean.starts_with("https://") {
-            format!("wss://{}/api/ws", &clean[8..])
-        } else if clean.starts_with("http://") {
-            format!("ws://{}/api/ws", &clean[7..])
+        if let Some(stripped) = clean.strip_prefix("https://") {
+            format!("wss://{}/api/ws", stripped)
+        } else if let Some(stripped) = clean.strip_prefix("http://") {
+            format!("ws://{}/api/ws", stripped)
         } else {
             format!("ws://{clean}/api/ws")
         }

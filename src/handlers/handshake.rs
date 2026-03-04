@@ -1,16 +1,3 @@
-/// ```packet
-/// [Length: u16][UID: u16][Type: u8 = 0x01]
-/// [ProtocolVersion: u16]
-/// [Engine: string]
-/// [Platform: string]
-/// ```
-/// Response:
-/// [ProtocolVersion: u16][ClientId: u16]
-/// [RemoteIP: bytes (4 or 16)][RemotePort: u16]
-/// [Flags: u8]
-/// (Flags.HasMaster ? [MasterAddress: string])
-/// [MaxPacketSize: u16][ConnectionTimeout: u16][KeepAliveInterval: u16]
-use std::net::IpAddr;
 
 use bytes::Bytes;
 use tracing::{debug, info, warn};

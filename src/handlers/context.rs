@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicU16, Ordering},
+    atomic::AtomicU16,
     Arc,
 };
 
@@ -128,7 +128,7 @@ pub fn broadcast_instance(state: &AppState, instance_id: u8, packet: Bytes, excl
         inst.get_players()
             .iter()
             .map(|p| p.client_id)
-            .filter(|id| exclude.map_or(true, |ex| *id != ex))
+            .filter(|id| exclude != Some(*id))
             .collect()
     };
 
@@ -163,7 +163,7 @@ pub fn broadcast_visible(
         inst.get_players()
             .iter()
             .filter(|p| {
-                exclude.map_or(true, |ex| p.client_id != ex)
+                (exclude != Some(p.client_id))
                     && inst.can_user_see_user(p.id, target_player_id)
             })
             .map(|p| p.client_id)

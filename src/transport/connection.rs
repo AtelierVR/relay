@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use bytes::Bytes;
 use quinn::Connection;
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 use crate::{
     client::client::new_client,
@@ -30,7 +29,7 @@ pub async fn handle_connection(state: Arc<AppState>, conn: Connection) -> Result
     let client_id = state.next_client_id();
     let (client_arc, mut push_rx) = new_client(client_id);
     {
-        let mut c = client_arc.write();
+        let c = client_arc.write();
         // Store the remote address string for relay_extensions.
         drop(c);
     }

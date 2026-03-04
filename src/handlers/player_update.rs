@@ -59,9 +59,9 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
 
     // If none → echo All back to requester only.
     if req_flags.is_empty() {
-        let pkt = build_update(&inst_arc, iid, pid, PlayerUpdateFlags::ALL, state);
+        let _pkt = build_update(&inst_arc, iid, pid, PlayerUpdateFlags::ALL, state);
         // Send to the requesting client with the request uid.
-        let mut w = PacketWriter::new();
+        let _w = PacketWriter::new();
         // re-build with uid
         let (disp, pflags) = {
             let inst = inst_arc.read();
@@ -149,7 +149,7 @@ fn build_update(
     iid: u8,
     pid: u16,
     flags: PlayerUpdateFlags,
-    state: &AppState,
+    _state: &AppState,
 ) -> Bytes {
     let (disp, pflags) = {
         let inst = inst_arc.read();

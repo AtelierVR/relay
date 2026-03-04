@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) {
+pub async fn handle(state: &AppState, client_id: u16, _uid: u16, payload: Bytes) {
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();

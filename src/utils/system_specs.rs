@@ -173,7 +173,7 @@ fn read_memory() -> [u64; 2] {
                 }
             }
         }
-        return [0, total];
+        [0, total]
     }
     // Non-Linux fallback.
     #[cfg(not(target_os = "linux"))]

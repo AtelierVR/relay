@@ -1,8 +1,7 @@
 use dashmap::DashMap;
-use parking_lot::RwLock;
 use std::sync::Arc;
 
-use super::client::{ArcClient, Client};
+use super::client::ArcClient;
 
 /// Global concurrent registry of connected clients.
 #[derive(Debug, Default)]
