@@ -23,7 +23,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     let inst_arc = match state.instances.get(iid) {
         Some(a) => a,
         None => {
-            debug!("Properties: unknown instance {iid}");
+            debug!("[Properties] unknown instance {}", iid);
             return;
         }
     };
@@ -33,7 +33,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         match inst.get_players().iter().find(|p| p.client_id == client_id) {
             Some(p) if p.is_ready() => p.id,
             _ => {
-                debug!("Properties: not-ready player from client {client_id}");
+                debug!("[Properties] not-ready player from client {}", client_id);
                 return;
             }
         }
@@ -46,15 +46,19 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         let inst = inst_arc.read();
         match inst.get_players().iter().find(|p| p.id == pid) {
             Some(p) if p.is_ready() => {
-                let self_p = inst.get_players().iter().find(|p| p.id == self_player_id).unwrap();
+                let self_p = inst
+                    .get_players()
+                    .iter()
+                    .find(|p| p.id == self_player_id)
+                    .unwrap();
                 if !self_p.has_privilege() {
-                    debug!("Properties: unprivileged operation on player {pid}");
+                    debug!("[Properties] unprivileged operation on player {}", pid);
                     return;
                 }
                 p.id
             }
             _ => {
-                debug!("Properties: op-player {pid} not ready");
+                debug!("[Properties] op-player {} not ready", pid);
                 return;
             }
         }
@@ -98,7 +102,12 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     }
 }
 
-fn build_properties(iid: u8, entity_id: u16, broadcaster_id: u16, dict: &HashMap<i32, Vec<u8>>) -> Bytes {
+fn build_properties(
+    iid: u8,
+    entity_id: u16,
+    broadcaster_id: u16,
+    dict: &HashMap<i32, Vec<u8>>,
+) -> Bytes {
     let mut w = PacketWriter::new();
     w.write_u8(iid);
     w.write_u16(entity_id);

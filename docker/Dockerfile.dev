@@ -1,0 +1,29 @@
+# Dockerfile de développement - Build rapide sans optimisations
+FROM rust:1.88-slim AS build
+WORKDIR /app
+
+# Copier les fichiers de dépendances
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main(){}" > src/main.rs
+
+# Build des dépendances uniquement (sera caché)
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    cargo build --target-dir /tmp/build-deps && \
+    rm -rf src
+
+# Copier le code source réel
+COPY src ./src
+
+# Build final avec un target-dir différent pour forcer recompilation
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    cargo build --target-dir /app/target && \
+    cp /app/target/debug/noxrelay /app/noxrelay
+
+# Runtime
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=build /app/noxrelay ./noxrelay
+COPY config.json ./config.json
+EXPOSE 23032/udp
+ENTRYPOINT ["./noxrelay"]

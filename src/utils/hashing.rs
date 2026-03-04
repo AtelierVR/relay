@@ -1,8 +1,8 @@
+use anyhow::Result;
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
-use anyhow::Result;
 
 /// Hash a plain-text password using Argon2id.
 ///

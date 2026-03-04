@@ -25,7 +25,7 @@ pub fn make_server_config(san_addresses: &[&str]) -> Result<quinn::ServerConfig>
     let cert = params.self_signed(&key_pair)?;
     let cert_der = rustls::pki_types::CertificateDer::from(cert.der().to_vec());
     let key_der = rustls::pki_types::PrivateKeyDer::from(
-        rustls::pki_types::PrivatePkcs8KeyDer::from(key_pair.serialize_der())
+        rustls::pki_types::PrivatePkcs8KeyDer::from(key_pair.serialize_der()),
     );
 
     let tls_config = ServerConfig::builder()
@@ -35,6 +35,7 @@ pub fn make_server_config(san_addresses: &[&str]) -> Result<quinn::ServerConfig>
     let quic_server_config =
         quinn::crypto::rustls::QuicServerConfig::try_from(Arc::new(tls_config))?;
 
-    Ok(quinn::ServerConfig::with_crypto(Arc::new(quic_server_config)))
+    Ok(quinn::ServerConfig::with_crypto(Arc::new(
+        quic_server_config,
+    )))
 }
-

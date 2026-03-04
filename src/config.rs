@@ -1,4 +1,7 @@
-use figment::{Figment, providers::{Format, Json, Env}};
+use figment::{
+    providers::{Env, Format, Json},
+    Figment,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::constants::*;
@@ -34,10 +37,6 @@ pub struct Config {
     #[serde(default = "default_keep_alive_interval")]
     pub keep_alive_interval: u16,
 
-    /// Seconds before an incomplete segmented packet is discarded.
-    #[serde(default = "default_segmentation_timeout")]
-    pub segmentation_timeout: u16,
-
     /// Enable debug-level logging.
     #[serde(default)]
     pub debug: bool,
@@ -46,20 +45,38 @@ pub struct Config {
 impl Config {
     /// Load from `config.json` (optional) then overlay `NOX_*` environment variables.
     pub fn load() -> anyhow::Result<Self> {
-        let cfg = Figment::new()
-            .merge(Json::file("config.json"))
-            .merge(Env::prefixed("NOX_").map(|k| {
-                k.as_str().to_lowercase().into()
-            }))
+        let figment = Figment::new();
+
+        // Try to merge config.json if it exists (optional)
+        let figment = if std::path::Path::new("config.json").exists() {
+            figment.merge(Json::file("config.json"))
+        } else {
+            figment
+        };
+
+        // Always merge environment variables (these can override or provide config)
+        let cfg = figment
+            .merge(Env::prefixed("NOX_").map(|k| k.as_str().to_lowercase().into()))
             .extract()?;
         Ok(cfg)
     }
 }
 
-fn default_port()               -> u16    { DEFAULT_PORT }
-fn default_master_gateway()     -> String { DEFAULT_MASTER_GATEWAY.to_owned() }
-fn default_use_address()        -> String { DEFAULT_USE_ADDRESS.to_owned() }
-fn default_max_instances()      -> u8     { DEFAULT_MAX_INSTANCES }
-fn default_connection_timeout() -> u16    { DEFAULT_CONNECTION_TIMEOUT }
-fn default_keep_alive_interval() -> u16   { DEFAULT_KEEP_ALIVE_INTERVAL }
-fn default_segmentation_timeout() -> u16  { DEFAULT_SEGMENTATION_TIMEOUT }
+fn default_port() -> u16 {
+    DEFAULT_PORT
+}
+fn default_master_gateway() -> String {
+    DEFAULT_MASTER_GATEWAY.to_owned()
+}
+fn default_use_address() -> String {
+    DEFAULT_USE_ADDRESS.to_owned()
+}
+fn default_max_instances() -> u8 {
+    DEFAULT_MAX_INSTANCES
+}
+fn default_connection_timeout() -> u16 {
+    DEFAULT_CONNECTION_TIMEOUT
+}
+fn default_keep_alive_interval() -> u16 {
+    DEFAULT_KEEP_ALIVE_INTERVAL
+}

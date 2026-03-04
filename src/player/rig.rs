@@ -25,20 +25,20 @@ impl TransformFlags {
 /// Full spatial transform for one rig part.
 #[derive(Debug, Clone, Copy)]
 pub struct Transform {
-    pub position:     Vec3,
-    pub rotation:     Quat,
-    pub scale:        Vec3,
-    pub velocity:     Vec3,
+    pub position: Vec3,
+    pub rotation: Quat,
+    pub scale: Vec3,
+    pub velocity: Vec3,
     pub ang_velocity: Vec3,
 }
 
 impl Default for Transform {
     fn default() -> Self {
         Self {
-            position:     Vec3::ZERO,
-            rotation:     Quat::IDENTITY,
-            scale:        Vec3::ONE,
-            velocity:     Vec3::ZERO,
+            position: Vec3::ZERO,
+            rotation: Quat::IDENTITY,
+            scale: Vec3::ONE,
+            velocity: Vec3::ZERO,
             ang_velocity: Vec3::ZERO,
         }
     }

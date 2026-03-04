@@ -1,7 +1,7 @@
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
-use crate::constants::{DGRAM_HEADER_SIZE, STREAM_HEADER_SIZE};
 use super::packet_type::PacketType;
+use crate::constants::{DGRAM_HEADER_SIZE, STREAM_HEADER_SIZE};
 
 /// Decoded packet header, shared between stream and datagram paths.
 #[derive(Debug, Clone, Copy)]
@@ -18,20 +18,28 @@ pub struct PacketHeader {
 /// Returns `(header, payload_bytes)` or an error string.
 pub fn decode_stream_header(mut data: Bytes) -> Result<(PacketHeader, Bytes), String> {
     if data.len() < STREAM_HEADER_SIZE {
-        return Err(format!("stream header too short: {} < {}", data.len(), STREAM_HEADER_SIZE));
+        return Err(format!(
+            "stream header too short: {} < {}",
+            data.len(),
+            STREAM_HEADER_SIZE
+        ));
     }
 
     let length = data.get_u16() as usize;
-    let uid    = data.get_u16();
+    let uid = data.get_u16();
     let type_byte = data.get_u8();
 
-    let packet_type = PacketType::try_from(type_byte)
-        .map_err(|b| format!("unknown packet type: 0x{:02X}", b))?;
+    let packet_type =
+        PacketType::try_from(type_byte).map_err(|b| format!("unknown packet type: 0x{:02X}", b))?;
 
     // Payload is everything after the 5-byte header, up to `length`.
     let payload_len = length.saturating_sub(STREAM_HEADER_SIZE);
     if data.len() < payload_len {
-        return Err(format!("payload truncated: {} < {}", data.len(), payload_len));
+        return Err(format!(
+            "payload truncated: {} < {}",
+            data.len(),
+            payload_len
+        ));
     }
 
     let payload = data.split_to(payload_len);
@@ -43,14 +51,18 @@ pub fn decode_stream_header(mut data: Bytes) -> Result<(PacketHeader, Bytes), St
 /// Wire format: [UID: u16 BE][Type: u8]
 pub fn decode_datagram_header(mut data: Bytes) -> Result<(PacketHeader, Bytes), String> {
     if data.len() < DGRAM_HEADER_SIZE {
-        return Err(format!("datagram header too short: {} < {}", data.len(), DGRAM_HEADER_SIZE));
+        return Err(format!(
+            "datagram header too short: {} < {}",
+            data.len(),
+            DGRAM_HEADER_SIZE
+        ));
     }
 
-    let uid       = data.get_u16();
+    let uid = data.get_u16();
     let type_byte = data.get_u8();
 
-    let packet_type = PacketType::try_from(type_byte)
-        .map_err(|b| format!("unknown packet type: 0x{:02X}", b))?;
+    let packet_type =
+        PacketType::try_from(type_byte).map_err(|b| format!("unknown packet type: 0x{:02X}", b))?;
 
     Ok((PacketHeader { uid, packet_type }, data))
 }

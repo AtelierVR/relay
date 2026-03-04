@@ -21,8 +21,8 @@ use crate::{
 #[repr(u8)]
 enum AvatarChangedResult {
     Changing = 0,
-    Failed   = 2,
-    Success  = 3,
+    Failed = 2,
+    Success = 3,
 }
 
 pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
@@ -53,10 +53,19 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
             Some(p) if p.is_ready() => p,
             _ => return make_error(uid, iid, "Player not found"),
         };
-        let self_p = inst.get_players().iter().find(|p| p.id == self_player_id).unwrap();
+
+        let self_p = inst
+            .get_players()
+            .iter()
+            .find(|p| p.id == self_player_id)
+            .unwrap();
         // A player is "allowed" to operate on another if they have privilege (matches C# IsAllowed).
         if !self_p.has_privilege() {
-            return make_error(uid, iid, "You are not allowed to change this player's avatar");
+            return make_error(
+                uid,
+                iid,
+                "You are not allowed to change this player's avatar",
+            );
         }
         op.id
     } else {
@@ -71,7 +80,10 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         parameters: std::collections::HashMap::new(),
     };
 
-    debug!("AvatarChanged: client {client_id} sets player {op_player_id} avatar → {:?}", avatar.id);
+    debug!(
+        "[AvatarChanged] player {} (by client {}) in instance {}: avatar={}",
+        op_player_id, client_id, iid, avatar.id
+    );
 
     // Apply avatar.
     {

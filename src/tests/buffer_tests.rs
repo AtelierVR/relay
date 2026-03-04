@@ -41,7 +41,11 @@ fn u16_roundtrip_big_endian() {
 #[test]
 fn i32_roundtrip() {
     for v in [-1_i32, 0, 1, i32::MAX, i32::MIN] {
-        assert_eq!(roundtrip(|w| w.write_i32(v), |r| r.read_i32()), v, "i32 {v}");
+        assert_eq!(
+            roundtrip(|w| w.write_i32(v), |r| r.read_i32()),
+            v,
+            "i32 {v}"
+        );
     }
 }
 
@@ -55,7 +59,11 @@ fn u32_roundtrip() {
 #[test]
 fn i64_roundtrip() {
     for v in [-1_i64, 0, 1, i64::MAX, i64::MIN, 1_700_000_000_000] {
-        assert_eq!(roundtrip(|w| w.write_i64(v), |r| r.read_i64()), v, "i64 {v}");
+        assert_eq!(
+            roundtrip(|w| w.write_i64(v), |r| r.read_i64()),
+            v,
+            "i64 {v}"
+        );
     }
 }
 
@@ -141,20 +149,14 @@ fn bytes_prefixed_roundtrip() {
 
 #[test]
 fn bytes_prefixed_empty() {
-    let result = roundtrip(
-        |w| w.write_bytes_prefixed(&[]),
-        |r| r.read_bytes_prefixed(),
-    );
+    let result = roundtrip(|w| w.write_bytes_prefixed(&[]), |r| r.read_bytes_prefixed());
     assert_eq!(result, &[] as &[u8]);
 }
 
 #[test]
 fn raw_bytes_roundtrip() {
     let data = [1u8, 2, 3, 4, 5];
-    let result = roundtrip(
-        |w| w.write_bytes(&data),
-        |r| r.read_bytes(5),
-    );
+    let result = roundtrip(|w| w.write_bytes(&data), |r| r.read_bytes(5));
     assert_eq!(result, data);
 }
 
@@ -232,7 +234,7 @@ fn string_underflow_returns_none() {
     // A string whose declared length exceeds remaining bytes → None
     let mut w = PacketWriter::new();
     w.write_u16(100); // says 100 bytes follow
-    // but nothing follows
+                      // but nothing follows
     let mut r = PacketReader::new(w.finish());
     assert!(r.read_string().is_none());
 }

@@ -3,8 +3,6 @@
 pub struct User {
     /// Master-server assigned numeric user ID (0 is invalid / unauthenticated).
     pub id: u32,
-    /// The user's login name.
-    pub username: String,
     /// The user's display name.
     pub display_name: String,
     /// The origin server address (e.g. `"nox.example.com"`).

@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use super::rig::Transform;
+use std::collections::HashMap;
 
 /// Map from rig-part index (u16) to its current `Transform`.
 #[derive(Debug, Clone, Default)]

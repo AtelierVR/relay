@@ -5,8 +5,8 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-use crate::constants::CLIENT_TX_BUFFER;
 use super::user::User;
+use crate::constants::CLIENT_TX_BUFFER;
 
 /// An enum indicating the authentication phase of a client.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

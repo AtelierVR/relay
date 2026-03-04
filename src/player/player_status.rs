@@ -2,11 +2,11 @@
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PlayerStatus {
-    None        = 0,
+    None = 0,
     NeedPassword = 1,
-    Preparing   = 2,
-    Traveling   = 3,
-    Ready       = 4,
+    Preparing = 2,
+    Traveling = 3,
+    Ready = 4,
 }
 
 impl Default for PlayerStatus {

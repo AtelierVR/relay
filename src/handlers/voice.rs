@@ -21,7 +21,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     let inst_arc = match state.instances.get(iid) {
         Some(a) => a,
         None => {
-            debug!("Voice: unknown instance {iid}");
+            debug!("[Voice] unknown instance {}", iid);
             return;
         }
     };
@@ -31,7 +31,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         match inst.get_players().iter().find(|p| p.client_id == client_id) {
             Some(p) if p.is_ready() => p.id,
             _ => {
-                debug!("Voice: not-ready player from client {client_id}");
+                debug!("[Voice] not-ready player from client {}", client_id);
                 return;
             }
         }
@@ -39,7 +39,10 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
 
     let remaining = r.remaining();
     if remaining == 0 || remaining % 2 != 0 {
-        debug!("Voice: invalid sample length {remaining} from client {client_id}");
+        debug!(
+            "[Voice] invalid sample length {} from client {}",
+            remaining, client_id
+        );
         return;
     }
 

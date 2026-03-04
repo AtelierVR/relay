@@ -26,7 +26,7 @@ pub fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Byt
     }
 
     let mut r = PacketReader::new(payload);
-    let client_ts = r.read_i64();   // client's DateTime (Unix ms)
+    let client_ts = r.read_i64(); // client's DateTime (Unix ms)
     let client_long = r.read_i64(); // opaque client long
 
     let now_ms = std::time::SystemTime::now()
@@ -35,8 +35,8 @@ pub fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Byt
         .as_millis() as i64;
 
     let mut w = PacketWriter::new();
-    w.write_i64(client_ts);   // echo client timestamp back
-    w.write_i64(now_ms);      // server timestamp
+    w.write_i64(client_ts); // echo client timestamp back
+    w.write_i64(now_ms); // server timestamp
     w.write_i64(client_long); // echo client long back
     encode_stream_packet(uid, PacketType::Latency, w.finish().as_ref())
 }

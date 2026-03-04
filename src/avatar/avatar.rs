@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Avatar data attached to a player.
 /// Wire format (in AvatarChanged): [Id: u32][Server: string][Version: u16][Parameters: ...]

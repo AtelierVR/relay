@@ -6,10 +6,7 @@ use crate::player::Player;
 use crate::utils::hashing::verify_password;
 
 use super::{
-    flags::InstanceFlags,
-    user_moderated::UserModerated,
-    view_group::ViewGroup,
-    world::World,
+    flags::InstanceFlags, user_moderated::UserModerated, view_group::ViewGroup, world::World,
 };
 
 /// A relay-hosted instance (a "room" players can enter).
@@ -71,8 +68,7 @@ impl Instance {
                 self.flags.remove(InstanceFlags::USE_PASSWORD);
             }
             Some(p) => {
-                let hash = crate::utils::hashing::hash_password(&p)
-                    .expect("argon2 hash failed");
+                let hash = crate::utils::hashing::hash_password(&p).expect("argon2 hash failed");
                 self.password_hash = Some(hash);
                 self.flags.insert(InstanceFlags::USE_PASSWORD);
             }
@@ -124,9 +120,10 @@ impl Instance {
     }
 
     pub fn get_master(&self) -> Option<&Player> {
-        self.players
-            .iter()
-            .find(|p| p.flags.contains(crate::player::PlayerFlags::INSTANCE_MASTER))
+        self.players.iter().find(|p| {
+            p.flags
+                .contains(crate::player::PlayerFlags::INSTANCE_MASTER)
+        })
     }
 
     pub fn player_count(&self) -> usize {
@@ -161,7 +158,10 @@ impl Instance {
             g.add_visible_group(group_id);
             self.view_groups.push(g);
         }
-        self.view_groups.iter_mut().find(|g| g.id == group_id).unwrap()
+        self.view_groups
+            .iter_mut()
+            .find(|g| g.id == group_id)
+            .unwrap()
     }
 
     pub fn create_custom_group(&mut self, name: Option<String>) -> &mut ViewGroup {

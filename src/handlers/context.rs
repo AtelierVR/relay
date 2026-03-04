@@ -1,4 +1,7 @@
-use std::sync::{atomic::{AtomicU16, Ordering}, Arc};
+use std::sync::{
+    atomic::{AtomicU16, Ordering},
+    Arc,
+};
 
 use bytes::Bytes;
 use parking_lot::Mutex;
@@ -15,7 +18,7 @@ use crate::{
 // ─── AppState ────────────────────────────────────────────────────────────────
 
 /// Global application state shared across all connection tasks.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AppState {
     pub clients: Arc<ClientManager>,
     pub instances: Arc<InstanceManager>,
@@ -67,7 +70,10 @@ pub struct IncomingPacket {
 pub fn require_handshake(state: &AppState, client_id: u16) -> Option<ArcClient> {
     let arc = state.clients.get(client_id)?;
     if !arc.read().is_handshaked() {
-        warn!("client {client_id}: packet rejected — no handshake");
+        warn!(
+            "[Context] client {}: packet rejected, no handshake",
+            client_id
+        );
         return None;
     }
     Some(arc)
@@ -77,7 +83,10 @@ pub fn require_handshake(state: &AppState, client_id: u16) -> Option<ArcClient> 
 pub fn require_auth(state: &AppState, client_id: u16) -> Option<ArcClient> {
     let arc = state.clients.get(client_id)?;
     if !arc.read().is_authenticated() {
-        warn!("client {client_id}: packet rejected — not authenticated");
+        warn!(
+            "[Context] client {}: packet rejected, not authenticated",
+            client_id
+        );
         return None;
     }
     Some(arc)
@@ -96,7 +105,10 @@ pub fn require_instance_player(
         inst.get_players().iter().any(|p| p.client_id == client_id)
     };
     if !player_exists {
-        warn!("client {client_id}: not found in instance {instance_id}");
+        warn!(
+            "[Context] client {}: not found in instance {}",
+            client_id, instance_id
+        );
         return None;
     }
     Some((client_arc, inst_arc))
@@ -105,12 +117,7 @@ pub fn require_instance_player(
 // ─── Broadcast helpers ───────────────────────────────────────────────────────
 
 /// Send `packet` to every client in `instance_id`, optionally excluding one.
-pub fn broadcast_instance(
-    state: &AppState,
-    instance_id: u8,
-    packet: Bytes,
-    exclude: Option<u16>,
-) {
+pub fn broadcast_instance(state: &AppState, instance_id: u8, packet: Bytes, exclude: Option<u16>) {
     let inst_arc = match state.instances.get(instance_id) {
         Some(a) => a,
         None => return,
@@ -129,7 +136,10 @@ pub fn broadcast_instance(
         if let Some(arc) = state.clients.get(cid) {
             let c = arc.read();
             if !c.try_push(packet.clone()) {
-                warn!("client {cid}: push channel full, dropping broadcast packet");
+                warn!(
+                    "[Context] client {}: push channel full, dropping broadcast packet",
+                    cid
+                );
             }
         }
     }
@@ -164,7 +174,10 @@ pub fn broadcast_visible(
         if let Some(arc) = state.clients.get(cid) {
             let c = arc.read();
             if !c.try_push(packet.clone()) {
-                warn!("client {cid}: push channel full, dropping visible-broadcast packet");
+                warn!(
+                    "[Context] client {}: push channel full, dropping visible-broadcast packet",
+                    cid
+                );
             }
         }
     }

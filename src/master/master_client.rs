@@ -1,4 +1,7 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{atomic::Ordering, Arc},
+    time::Duration,
+};
 
 use anyhow::{anyhow, Result};
 use dashmap::DashMap;
@@ -10,14 +13,25 @@ use tokio_tungstenite::{connect_async_tls_with_config, tungstenite::Message};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
+use crate::utils::system_specs::get_specs;
+
 use crate::{
+    client::ClientManager,
+    // commands::{CommandContext, CommandRegistry}, // TODO: Commands not yet implemented
     config::Config,
-    utils::log_buffer::{LogBuffer, LogEntry},
+    instance::InstanceManager,
+    utils::log_buffer::LogBuffer,
+    utils::log_layer::LogForwarder,
 };
 
-use super::messages::{
-    DropInstance, LogsRequest, RelayConnected, RelayStatus, RequestInstancesReq,
-    RequestInstancesResp, ResolveUserRequest, ResolveUserResponse, SyncInstancesResp, WsMessage,
+use super::{
+    messages::{
+        ClientInfo, CommandRequest, DropInstance, GetClientsReq, GetClientsResp, GetInstancesReq,
+        GetInstancesResp, HasInstanceReq, HasInstanceResp, InstanceInfo, LogsRequest, PingResponse,
+        PlayerInfo, RelayConnected, RequestInstancesReq, RequestInstancesResp, ResolveUserRequest,
+        ResolveUserResponse, SyncInstanceData, SyncInstancesReq, SyncInstancesResp, WsMessage,
+    },
+    relay_extensions,
 };
 
 type PendingMap = Arc<DashMap<String, oneshot::Sender<Value>>>;
@@ -25,9 +39,10 @@ type PendingMap = Arc<DashMap<String, oneshot::Sender<Value>>>;
 /// Async WebSocket client for the MasterServer connection.
 ///
 /// Reconnects automatically with exponential back-off on disconnect.
-#[derive(Debug)]
 pub struct MasterClient {
     config: Arc<Config>,
+    clients: Arc<ClientManager>,
+    instances: Arc<InstanceManager>,
     /// Pending correlated requests: message-id → response sender.
     pending: PendingMap,
     /// Notify token: signal the send task that a new message is queued.
@@ -38,22 +53,49 @@ pub struct MasterClient {
     pub log_buf: Arc<parking_lot::Mutex<LogBuffer>>,
     /// Relay start time (Unix ms).
     pub start_time_ms: i64,
+    /// Whether the WS connection is currently alive (for background tasks).
+    connected: Arc<std::sync::atomic::AtomicBool>,
+    /// Real-time log forwarder: set during an active WS session.
+    log_forwarder: LogForwarder,
+    // Command registry for handling remote commands (TODO: not yet implemented).
+    // command_registry: CommandRegistry,
 }
 
 impl MasterClient {
-    pub fn new(config: Arc<Config>) -> Self {
+    pub fn new(
+        config: Arc<Config>,
+        clients: Arc<ClientManager>,
+        instances: Arc<InstanceManager>,
+        log_buf: Arc<parking_lot::Mutex<LogBuffer>>,
+        log_forwarder: LogForwarder,
+    ) -> Self {
         let start_time_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as i64;
 
+        // TODO: Commands not yet implemented
+        // let command_context = CommandContext::new(
+        //     Arc::clone(&config),
+        //     Arc::clone(&clients),
+        //     Arc::clone(&instances),
+        //     start_time_ms,
+        //     vec![], // Will be filled by CommandRegistry
+        // );
+        // let command_registry = CommandRegistry::new(command_context);
+
         Self {
             config,
+            clients,
+            instances,
             pending: Arc::new(DashMap::new()),
             send_notify: Arc::new(Notify::new()),
             send_queue: Arc::new(Mutex::new(Vec::new())),
-            log_buf: Arc::new(parking_lot::Mutex::new(LogBuffer::new(1000))),
+            log_buf,
             start_time_ms,
+            connected: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            log_forwarder,
+            // command_registry, // TODO: Commands not yet implemented
         }
     }
 
@@ -94,8 +136,9 @@ impl MasterClient {
         self.pending.remove(&id);
 
         match result {
-            Ok(Ok(val)) => serde_json::from_value(val)
-                .map_err(|e| anyhow!("response deserialize: {e}")),
+            Ok(Ok(val)) => {
+                serde_json::from_value(val).map_err(|e| anyhow!("response deserialize: {e}"))
+            }
             Ok(Err(_)) => Err(anyhow!("request channel closed")),
             Err(_) => Err(anyhow!("request timed out after {timeout_secs}s")),
         }
@@ -111,31 +154,240 @@ impl MasterClient {
     ) -> Result<ResolveUserResponse> {
         self.request(
             "resolve_user",
-            ResolveUserRequest { user_id, server, fingerprint },
+            ResolveUserRequest {
+                user_id,
+                server,
+                fingerprint,
+            },
             10,
         )
         .await
     }
 
     pub async fn request_instances(&self, count: u8) -> Result<RequestInstancesResp> {
-        self.request("request_instances", RequestInstancesReq { count }, 15).await
+        self.request("request_instances", RequestInstancesReq { count }, 15)
+            .await
     }
 
-    pub fn send_log(&self, timestamp: i64, level: &str, message: &str) {
-        let _ = self.emit(
-            "log",
-            serde_json::json!({
-                "Timestamp": timestamp,
-                "Level": level,
-                "Message": message,
-            }),
+    /// Sync existing instances with the master server.
+    pub async fn sync_instances_with_master(&self) -> Result<SyncInstancesResp> {
+        let relay_uptime = (std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64
+            - self.start_time_ms) as f64
+            / 1000.0;
+
+        let instances: Vec<SyncInstanceData> = self
+            .instances
+            .all()
+            .iter()
+            .map(|arc_inst| {
+                let inst = arc_inst.read();
+                SyncInstanceData {
+                    master_id: inst.master_id,
+                    internal_id: inst.internal_id as u32,
+                    password: None, // Password hash is not synced back
+                    capacity: inst.capacity,
+                    player_count: inst.get_players().len(),
+                    world: inst.world.to_identifier(),
+                    flags: format!("{:?}", inst.flags),
+                }
+            })
+            .collect();
+
+        let req = SyncInstancesReq {
+            instances,
+            relay_uptime,
+        };
+
+        self.request("relay_sync_instances", req, 10).await
+    }
+
+    /// Called when connected to master. Syncs existing instances and requests new ones if needed.
+    pub async fn on_connected(&self) {
+        use crate::instance::{Instance, InstanceFlags, World};
+
+        info!("[MasterClient] on_connected() started");
+
+        let max_instances = self.config.max_instances;
+        let current_count = self.instances.count();
+
+        info!(
+            "[MasterClient] Connected. Current instances: {}/{}",
+            current_count, max_instances
         );
+
+        // Sync existing instances if any
+        if current_count > 0 {
+            debug!(
+                "[MasterClient] Found {} existing instances, syncing with master...",
+                current_count
+            );
+
+            match self.sync_instances_with_master().await {
+                Ok(resp) => {
+                    if resp.success {
+                        debug!(
+                            "[MasterClient] Successfully synced {} instances (conflicts: {})",
+                            resp.synced_count, resp.conflicts_resolved
+                        );
+
+                        // Remove invalid instances reported by master
+                        if let Some(invalid) = resp.invalid_instances {
+                            if !invalid.is_empty() {
+                                warn!(
+                                    "[MasterClient] Master reported {} invalid instances, removing...",
+                                    invalid.len()
+                                );
+
+                                for master_id in invalid {
+                                    // Find and remove instance with this master_id
+                                    let mut to_remove = None;
+                                    self.instances.for_each(|internal_id, arc_inst| {
+                                        if arc_inst.read().master_id == master_id {
+                                            to_remove = Some(internal_id);
+                                        }
+                                    });
+
+                                    if let Some(id) = to_remove {
+                                        self.instances.remove(id);
+                                        debug!(
+                                            "[MasterClient] Removed invalid instance #{}",
+                                            master_id
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        error!(
+                            "[MasterClient] Master rejected instance sync: {}",
+                            resp.error.unwrap_or_else(|| "Unknown error".to_string())
+                        );
+                        return;
+                    }
+                }
+                Err(e) => {
+                    warn!("[MasterClient] Failed to sync instances: {}", e);
+                    return;
+                }
+            }
+        }
+
+        // Calculate how many additional instances we need
+        let current_count = self.instances.count(); // May have changed after sync
+        let needed = max_instances.saturating_sub(current_count as u8);
+
+        if needed == 0 {
+            debug!(
+                "[MasterClient] Have {}/{} instances, no additional instances needed",
+                current_count, max_instances
+            );
+            return;
+        }
+
+        // Request additional instances
+        debug!(
+            "[MasterClient] Requesting {} additional instances (currently have {}/{})",
+            needed, current_count, max_instances
+        );
+
+        debug!("[MasterClient] Calling request_instances({})...", needed);
+        match self.request_instances(needed).await {
+            Ok(resp) => {
+                if !resp.success {
+                    error!(
+                        "[MasterClient] Failed to request instances: {}",
+                        resp.error.unwrap_or_else(|| "Unknown error".to_string())
+                    );
+                    return;
+                }
+
+                debug!("[MasterClient] request_instances response success=true");
+                let instances = resp.instances;
+                let num_instances = instances.len();
+                info!(
+                    "[MasterClient] Received {} instances from master server",
+                    num_instances
+                );
+
+                if num_instances == 0 {
+                    warn!(
+                        "[MasterClient] Master returned 0 instances (requested: {})",
+                        needed
+                    );
+                }
+
+                // Create instances locally
+                for spec in instances {
+                    let internal_id = self.instances.next_internal_id();
+                    if internal_id == u8::MAX {
+                        warn!(
+                            "[MasterClient] No available internal IDs, stopping instance creation"
+                        );
+                        break;
+                    }
+
+                    let mut instance = Instance::new(internal_id, spec.id);
+                    instance.capacity = spec.capacity;
+
+                    // In debug mode, authorize bots by default
+                    if self.config.debug {
+                        instance.flags.insert(InstanceFlags::AUTHORIZE_BOT);
+                    }
+
+                    if let Some(pwd) = spec.password {
+                        instance.set_password(Some(pwd));
+                    }
+
+                    if let Some(world_spec) = spec.world {
+                        instance.world =
+                            World::new(world_spec.id, world_spec.address, world_spec.version);
+                    }
+
+                    self.instances.add(instance);
+                    debug!(
+                        "[MasterClient] Created instance #{} (internal ID: {}) - Total instances now: {}",
+                        spec.id, internal_id, self.instances.count()
+                    );
+                }
+
+                // Sync newly created instances with master
+                if num_instances > 0 {
+                    debug!("[MasterClient] Syncing newly received instances with master...");
+                    match self.sync_instances_with_master().await {
+                        Ok(_) => {
+                            debug!("[MasterClient] Successfully synced new instances");
+                        }
+                        Err(e) => {
+                            warn!("[MasterClient] Failed to sync new instances: {}", e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                error!("[MasterClient] Error requesting instances: {}", e);
+            }
+        }
+    }
+
+    pub fn send_log(&self, timestamp: i64, level: &str, message: &str, tag: Option<&str>) {
+        let mut data = serde_json::json!({
+            "Timestamp": timestamp,
+            "Level": level,
+            "Message": message,
+        });
+        if let Some(t) = tag {
+            data["Tag"] = serde_json::json!(t);
+        }
+        let _ = self.emit("log", data);
     }
 
     // ── Reconnect loop ───────────────────────────────────────────────────
 
     /// Run the persistent reconnect loop.  Call this in a dedicated `tokio::spawn`.
-    pub async fn run(self: Arc<Self>, on_ready: impl Fn() + Send + 'static) {
+    pub async fn run(self: Arc<Self>) {
         let mut backoff = Duration::from_secs(1);
         const MAX_BACKOFF: Duration = Duration::from_secs(30);
 
@@ -145,7 +397,7 @@ impl MasterClient {
 
             info!("[MasterClient] Connecting to {ws_url}");
 
-            match self.run_session(&ws_url, &on_ready).await {
+            match self.run_session(&ws_url).await {
                 Ok(()) => {
                     warn!("[MasterClient] Session ended cleanly; reconnecting…");
                 }
@@ -159,20 +411,15 @@ impl MasterClient {
         }
     }
 
-    async fn run_session(
-        self: &Arc<Self>,
-        url: &str,
-        on_ready: &impl Fn(),
-    ) -> Result<()> {
+    async fn run_session(self: &Arc<Self>, url: &str) -> Result<()> {
         use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
         let mut request = url.into_client_request()?;
         let token = &self.config.token;
         if !token.is_empty() {
-            request.headers_mut().insert(
-                "Authorization",
-                format!("Badger {token}").parse()?,
-            );
+            request
+                .headers_mut()
+                .insert("Authorization", format!("Badger {token}").parse()?);
         }
 
         let (ws_stream, _) = connect_async_tls_with_config(request, None, false, None).await?;
@@ -181,13 +428,98 @@ impl MasterClient {
         // Reset back-off on success is handled by the caller resetting after Ok return.
         let (mut sink, mut stream) = ws_stream.split();
 
-        on_ready();
+        self.connected.store(true, Ordering::Relaxed);
 
-        let pending = Arc::clone(&self.pending);
         let send_queue = Arc::clone(&self.send_queue);
         let send_notify = Arc::clone(&self.send_notify);
+        let connected = Arc::clone(&self.connected);
+        let instances_p = Arc::clone(&self.instances);
 
-        // Outbound task: drain the queue whenever notified.
+        // ── Real-time log forwarding task ─────────────────────────────────
+        let (log_tx, mut log_rx) =
+            tokio::sync::mpsc::unbounded_channel::<crate::utils::log_buffer::LogEntry>();
+        *self.log_forwarder.lock() = Some(log_tx);
+        let log_sq = Arc::clone(&self.send_queue);
+        let log_sn = Arc::clone(&self.send_notify);
+        let log_conn = Arc::clone(&connected);
+        let log_task = tokio::spawn(async move {
+            while let Some(entry) = log_rx.recv().await {
+                if !log_conn.load(Ordering::Relaxed) {
+                    break;
+                }
+                let mut data = serde_json::json!({
+                    "Timestamp": entry.timestamp,
+                    "Level": entry.level,
+                    "Message": entry.message,
+                });
+                if let Some(tag) = entry.tag {
+                    data["Tag"] = serde_json::json!(tag);
+                }
+                let msg = WsMessage::new("log", data);
+                if let Ok(json) = serde_json::to_string(&msg) {
+                    log_sq.lock().push(json);
+                    log_sn.notify_one();
+                }
+            }
+        });
+
+        // ── Ping task (every 15 s) ────────────────────────────────────────
+        let ping_sq = Arc::clone(&self.send_queue);
+        let ping_sn = Arc::clone(&self.send_notify);
+        let ping_conn = Arc::clone(&connected);
+        let ping_inst = Arc::clone(&instances_p);
+        let ping_task = tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(15)).await;
+                if !ping_conn.load(Ordering::Relaxed) {
+                    break;
+                }
+                let count = ping_inst.all().len() as u32;
+                let msg = WsMessage::new(
+                    "ping",
+                    serde_json::json!({
+                        "time": std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis() as i64,
+                        "instance_count": count
+                    }),
+                );
+                if let Ok(json) = serde_json::to_string(&msg) {
+                    ping_sq.lock().push(json);
+                    ping_sn.notify_one();
+                }
+            }
+        });
+
+        // ── Specs push task (every 500 ms) ────────────────────────────────
+        let specs_sq = Arc::clone(&self.send_queue);
+        let specs_sn = Arc::clone(&self.send_notify);
+        let specs_conn = Arc::clone(&connected);
+        let specs_task = tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                if !specs_conn.load(Ordering::Relaxed) {
+                    break;
+                }
+                // get_specs() performs blocking I/O; run it off the async executor.
+                let specs = tokio::task::spawn_blocking(get_specs).await;
+                let specs = match specs {
+                    Ok(s) => s,
+                    Err(e) => {
+                        warn!("[MasterClient] specs task error: {e}");
+                        continue;
+                    }
+                };
+                let msg = WsMessage::new("specs", &specs);
+                if let Ok(json) = serde_json::to_string(&msg) {
+                    specs_sq.lock().push(json);
+                    specs_sn.notify_one();
+                }
+            }
+        });
+
+        // ── Outbound task: drain the queue whenever notified ──────────────
         let send_task = tokio::spawn(async move {
             loop {
                 send_notify.notified().await;
@@ -203,6 +535,14 @@ impl MasterClient {
             }
         });
 
+        // ── Initialize instances after connection established ──────────────
+        {
+            let self_ref = Arc::clone(self);
+            tokio::spawn(async move {
+                self_ref.on_connected().await;
+            });
+        }
+
         // Inbound loop.
         while let Some(msg) = stream.next().await {
             match msg? {
@@ -216,7 +556,12 @@ impl MasterClient {
             }
         }
 
+        self.connected.store(false, Ordering::Relaxed);
+        *self.log_forwarder.lock() = None;
+        log_task.abort();
         send_task.abort();
+        ping_task.abort();
+        specs_task.abort();
         Ok(())
     }
 
@@ -239,18 +584,54 @@ impl MasterClient {
         match envelope.msg_type.as_str() {
             "relay_connected" => {
                 if let Ok(rc) = serde_json::from_value::<RelayConnected>(envelope.data) {
-                    info!("[MasterClient] relay_connected id={} master_address={}", rc.id, rc.master_address);
+                    info!(
+                        "[MasterClient] relay_connected id={} master_address={}",
+                        rc.id, rc.master_address
+                    );
                 }
             }
             "drop_instance" => {
                 if let Ok(di) = serde_json::from_value::<DropInstance>(envelope.data) {
-                    warn!("[MasterClient] drop_instance #{}: {}", di.instance_id, di.message.unwrap_or_default());
-                    // Actual instance removal is handled by a registered callback; see AppState.
+                    warn!(
+                        "[MasterClient] drop_instance #{}: {}",
+                        di.instance_id,
+                        di.message.as_deref().unwrap_or_default()
+                    );
+                    let internal_id = self
+                        .instances
+                        .all()
+                        .into_iter()
+                        .find(|arc| arc.read().master_id == di.instance_id)
+                        .map(|arc| arc.read().internal_id);
+                    if let Some(id) = internal_id {
+                        self.instances.remove(id);
+                        debug!(
+                            "[MasterClient] instance #{} (internal {id}) dropped",
+                            di.instance_id
+                        );
+                    } else {
+                        warn!(
+                            "[MasterClient] drop_instance: instance #{} not found locally",
+                            di.instance_id
+                        );
+                    }
                 }
             }
             "status" => {
-                // Status request — the response is sent by AppState logic; nothing to do here.
-                debug!("[MasterClient] status request (id={:?})", envelope.id);
+                let status = relay_extensions::build_status(
+                    &self.clients,
+                    &self.instances,
+                    self.config.max_instances,
+                    self.start_time_ms,
+                    self.config.port,
+                );
+                let mut msg = WsMessage::new("status", status);
+                if let Some(id) = envelope.id {
+                    msg = msg.with_id(id);
+                }
+                if let Ok(json) = serde_json::to_string(&msg) {
+                    self.emit_raw(json);
+                }
             }
             "logs" => {
                 if let Ok(req) = serde_json::from_value::<LogsRequest>(envelope.data.clone()) {
@@ -262,10 +643,128 @@ impl MasterClient {
                             buf.last_n(req.limit)
                         }
                     };
-                    let _ = self.emit(
-                        "logs",
-                        serde_json::json!({ "logs": entries }),
-                    );
+                    let mut msg = WsMessage::new("logs", serde_json::json!({ "logs": entries }));
+                    if let Some(id) = envelope.id {
+                        msg = msg.with_id(id);
+                    }
+                    if let Ok(json) = serde_json::to_string(&msg) {
+                        self.emit_raw(json);
+                    }
+                }
+            }
+            "has_instance" => {
+                if let Ok(req) = serde_json::from_value::<HasInstanceReq>(envelope.data.clone()) {
+                    let exists = self
+                        .instances
+                        .all()
+                        .iter()
+                        .any(|arc| arc.read().master_id == req.id);
+                    let resp = HasInstanceResp { exists };
+                    let mut msg = WsMessage::new("has_instance", resp);
+                    if let Some(id) = envelope.id {
+                        msg = msg.with_id(id);
+                    }
+                    if let Ok(json) = serde_json::to_string(&msg) {
+                        self.emit_raw(json);
+                    }
+                }
+            }
+            "get_clients" => {
+                if let Ok(req) = serde_json::from_value::<GetClientsReq>(envelope.data.clone()) {
+                    let total = self.clients.count() as u32;
+                    let mut clients: Vec<ClientInfo> = Vec::new();
+                    let mut count = 0;
+                    let mut skipped = 0;
+                    let limit = if req.limit > 0 { req.limit } else { 100 };
+
+                    self.clients.for_each(|_, arc| {
+                        if skipped < req.offset {
+                            skipped += 1;
+                            return;
+                        }
+                        if count >= limit {
+                            return;
+                        }
+                        let c = arc.read();
+                        clients.push(ClientInfo {
+                            i: c.id.to_string(),
+                            a: "unknown".to_string(), // TODO: get actual address
+                            p: c.platform.clone(),
+                            e: c.engine.clone(),
+                            u: c.user.as_ref().map(|u| u.to_identifier()),
+                        });
+                        count += 1;
+                    });
+
+                    let resp = GetClientsResp { total, clients };
+                    let mut msg = WsMessage::new("get_clients", resp);
+                    if let Some(id) = envelope.id {
+                        msg = msg.with_id(id);
+                    }
+                    if let Ok(json) = serde_json::to_string(&msg) {
+                        self.emit_raw(json);
+                    }
+                }
+            }
+            "get_instances" => {
+                if let Ok(req) = serde_json::from_value::<GetInstancesReq>(envelope.data.clone()) {
+                    let all_instances = self.instances.all();
+                    let total = all_instances.len() as u32;
+                    let instances: Vec<InstanceInfo> = all_instances
+                        .iter()
+                        .skip(req.offset)
+                        .take(if req.limit > 0 { req.limit } else { 100 })
+                        .map(|arc| {
+                            let inst = arc.read();
+                            InstanceInfo {
+                                i: inst.master_id.to_string(),
+                                n: inst.internal_id as u32,
+                                p: inst
+                                    .get_players()
+                                    .iter()
+                                    .map(|p| PlayerInfo {
+                                        i: p.id.to_string(),
+                                        c: p.client_id.to_string(),
+                                        d: p.display.clone().unwrap_or_else(|| {
+                                            self.clients
+                                                .get(p.client_id)
+                                                .and_then(|arc| {
+                                                    arc.read()
+                                                        .user
+                                                        .as_ref()
+                                                        .map(|u| u.display_name.clone())
+                                                })
+                                                .unwrap_or_else(|| "Unknown".to_string())
+                                        }),
+                                        f: p.flags.bits(),
+                                    })
+                                    .collect(),
+                                f: inst.flags.bits(),
+                                w: format!("{}@{}", inst.world.master_id, inst.world.address),
+                                c: inst.capacity,
+                            }
+                        })
+                        .collect();
+                    let resp = GetInstancesResp { total, instances };
+                    let mut msg = WsMessage::new("get_instances", resp);
+                    if let Some(id) = envelope.id {
+                        msg = msg.with_id(id);
+                    }
+                    if let Ok(json) = serde_json::to_string(&msg) {
+                        self.emit_raw(json);
+                    }
+                }
+            }
+            "ping" => {
+                if let Ok(_resp) = serde_json::from_value::<PingResponse>(envelope.data.clone()) {
+                    // Silently handle ping response - latency could be calculated if needed
+                }
+            }
+            "command" => {
+                if let Ok(req) = serde_json::from_value::<CommandRequest>(envelope.data.clone()) {
+                    info!("[Command] $ {}", req.content);
+                    // TODO: Commands not yet implemented
+                    // self.command_registry.execute(&req.content);
                 }
             }
             other => {

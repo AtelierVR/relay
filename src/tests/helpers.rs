@@ -26,13 +26,18 @@ pub fn make_state() -> AppState {
         max_instances: 3,
         connection_timeout: 15,
         keep_alive_interval: 5,
-        segmentation_timeout: 30,
         debug: false,
     });
+    let clients = Arc::new(ClientManager::new());
+    let instances = Arc::new(InstanceManager::new());
     AppState::new(
-        Arc::new(ClientManager::new()),
-        Arc::new(InstanceManager::new()),
-        Arc::new(MasterClient::new(config.clone())),
+        clients,
+        instances,
+        Arc::new(MasterClient::new(
+            config.clone(),
+            Arc::clone(&clients),
+            Arc::clone(&instances),
+        )),
         config,
         Arc::new(Mutex::new(LogBuffer::new(16))),
     )
@@ -62,7 +67,11 @@ pub fn decode_stream(data: Bytes) -> (u16, PacketType, Bytes) {
     assert!(!data.is_empty(), "expected a non-empty response packet");
     let mut r = PacketReader::new(data.clone());
     let total = r.read_u16() as usize;
-    assert_eq!(total, data.len(), "stream packet: total-length field mismatch");
+    assert_eq!(
+        total,
+        data.len(),
+        "stream packet: total-length field mismatch"
+    );
     let uid = r.read_u16();
     let type_byte = r.read_u8();
     let ptype = PacketType::try_from(type_byte)

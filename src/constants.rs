@@ -1,5 +1,6 @@
 // Protocol and server constants.
 pub const PROTOCOL_VERSION: u16 = 1;
+pub const ENGINE: &str = "nox";
 pub const VERSION: &str = "0.1.0";
 
 // Default network settings.
@@ -10,12 +11,11 @@ pub const DEFAULT_USE_ADDRESS: &str = "127.0.0.1:23032";
 // Packet sizing.
 pub const MAX_PACKET_SIZE: usize = 1029; // 1024 payload + 5 header bytes
 pub const STREAM_HEADER_SIZE: usize = 5; // [Length: u16][UID: u16][Type: u8]
-pub const DGRAM_HEADER_SIZE: usize = 3;  // [UID: u16][Type: u8] (length implicit)
+pub const DGRAM_HEADER_SIZE: usize = 3; // [UID: u16][Type: u8] (length implicit)
 
 // Session timeouts (seconds).
 pub const DEFAULT_CONNECTION_TIMEOUT: u16 = 15;
 pub const DEFAULT_KEEP_ALIVE_INTERVAL: u16 = 5;
-pub const DEFAULT_SEGMENTATION_TIMEOUT: u16 = 30;
 
 // Instance limits.
 pub const DEFAULT_MAX_INSTANCES: u8 = 3;

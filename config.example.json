@@ -1,0 +1,7 @@
+{
+  "relay_address": "0.0.0.0:30000",
+  "master_url": "ws://localhost:3000/relay",
+  "relay_id": "relay-01",
+  "max_clients": 1000,
+  "debug": false
+}

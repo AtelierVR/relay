@@ -21,12 +21,12 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum QuitType {
-    Normal            = 0,
-    Timeout           = 1,
-    ModerationKick    = 2,
-    VoteKick          = 3,
-    ConfigurationError= 4,
-    UnknownError      = 5,
+    Normal = 0,
+    Timeout = 1,
+    ModerationKick = 2,
+    VoteKick = 3,
+    ConfigurationError = 4,
+    UnknownError = 5,
 }
 
 impl QuitType {
@@ -53,21 +53,54 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     let iid = r.read_u8();
     let inst_arc = match state.instances.get(iid) {
         Some(a) => a,
-        None => return make_quit_response(uid, iid, QuitType::UnknownError, Some("Instance not found.")),
+        None => {
+            return make_quit_response(
+                uid,
+                iid,
+                QuitType::UnknownError,
+                Some("Instance not found."),
+            )
+        }
     };
 
     let self_player_id = {
         let inst = inst_arc.read();
         match inst.get_players().iter().find(|p| p.client_id == client_id) {
             Some(p) => p.id,
-            None => return make_quit_response(uid, iid, QuitType::UnknownError, Some("You are not in the instance.")),
+            None => {
+                return make_quit_response(
+                    uid,
+                    iid,
+                    QuitType::UnknownError,
+                    Some("You are not in the instance."),
+                )
+            }
         }
     };
 
     let quit_type = QuitType::from_u8(r.read_u8());
-    let reason: Option<String> = if r.remaining() > 2 { r.read_string() } else { None };
+    let reason: Option<String> = if r.remaining() > 2 {
+        r.read_string()
+    } else {
+        None
+    };
 
-    info!("Quit: client {client_id} / player {self_player_id} leaving instance {iid} ({quit_type:?})");
+    // Log player leaving with user info
+    let user_info = if let Some(arc) = state.clients.get(client_id) {
+        let c = arc.read();
+        if let Some(u) = &c.user {
+            format!("{}@{} (\"{}\")", u.id, u.address, u.display_name)
+        } else {
+            String::from("(unauthenticated)")
+        }
+    } else {
+        String::from("(unknown)")
+    };
+    let reason_str = reason.as_deref().unwrap_or("none");
+    info!(
+        "[Quit] player {} (client {}) left instance {} | user={} type={:?} reason={}",
+        self_player_id, client_id, iid, user_info, quit_type, reason_str
+    );
 
     // Collect all other READY players for Leave fanout: (player_id, client_id, has_privilege).
     let others: Vec<(u16, u16, bool)> = {
@@ -105,8 +138,13 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
             } else {
                 None
             };
-            let reason_to_send = if by_id.is_some() { reason.as_deref() } else { None };
-            let leave_to_other = build_leave(iid, self_player_id, type_for_other, by_id, reason_to_send);
+            let reason_to_send = if by_id.is_some() {
+                reason.as_deref()
+            } else {
+                None
+            };
+            let leave_to_other =
+                build_leave(iid, self_player_id, type_for_other, by_id, reason_to_send);
             if let Some(arc) = state.clients.get(*other_cid) {
                 arc.read().try_push(leave_to_other);
             }
@@ -130,7 +168,13 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     make_quit_response(uid, iid, quit_type, reason.as_deref())
 }
 
-fn build_leave(iid: u8, player_id: u16, quit_type: QuitType, by_id: Option<u16>, reason: Option<&str>) -> Bytes {
+fn build_leave(
+    iid: u8,
+    player_id: u16,
+    quit_type: QuitType,
+    by_id: Option<u16>,
+    reason: Option<&str>,
+) -> Bytes {
     let mut w = PacketWriter::new();
     w.write_u8(iid);
     w.write_u8(quit_type as u8);

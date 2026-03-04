@@ -15,12 +15,18 @@ use crate::{
         header::encode_stream_packet,
         packet_type::PacketType,
     },
+    utils::hex_fmt,
 };
 
 // One instance record size (fixed): flags(4) + iid(1) + master_id(4) + count(2) + capacity(2) = 13 bytes
 const RECORD_SIZE: usize = 13;
 
 pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
+    debug!(
+        "[Sessions] client {}: raw payload: {}",
+        client_id,
+        hex_fmt::fmt_bytes(payload.as_ref(), 32)
+    );
     // Must have at least handshaked.
     let is_ok = state
         .clients
@@ -33,7 +39,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
 
     let mut r = PacketReader::new(payload);
     let page = r.read_u8();
-    debug!("Sessions: client {client_id} page {page}");
+    debug!("[Sessions] client {client_id}: requested page {page}");
 
     // Collect all instance records.
     let records: Vec<(u32, u8, u32, u16, u16)> = {

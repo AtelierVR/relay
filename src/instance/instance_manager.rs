@@ -1,6 +1,6 @@
-use std::sync::Arc;
 use dashmap::DashMap;
 use parking_lot::RwLock;
+use std::sync::Arc;
 
 use super::instance::{ArcInstance, Instance};
 
@@ -12,7 +12,9 @@ pub struct InstanceManager {
 
 impl InstanceManager {
     pub fn new() -> Self {
-        Self { instances: DashMap::new() }
+        Self {
+            instances: DashMap::new(),
+        }
     }
 
     /// Insert an instance. Uses `instance.internal_id` as the key.
@@ -43,7 +45,10 @@ impl InstanceManager {
     }
 
     pub fn all(&self) -> Vec<ArcInstance> {
-        self.instances.iter().map(|e| Arc::clone(e.value())).collect()
+        self.instances
+            .iter()
+            .map(|e| Arc::clone(e.value()))
+            .collect()
     }
 
     /// Find the lowest u8 internal ID not currently in use.

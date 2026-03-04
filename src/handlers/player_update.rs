@@ -7,7 +7,7 @@
 ///   (?[display: string])(?[player_flags: u32])
 use bitflags::bitflags;
 use bytes::Bytes;
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::{
     handlers::context::AppState,
@@ -32,7 +32,7 @@ bitflags! {
 enum PlayerUpdateResult {
     Success = 0,
     Failure = 1,
-    Change  = 2,
+    Change = 2,
 }
 
 pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
@@ -68,7 +68,15 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
             let p = inst.get_player(pid).unwrap();
             (p.display.clone(), p.flags.bits())
         };
-        let encoded = build_update_packet(uid, iid, PlayerUpdateResult::Change, pid, PlayerUpdateFlags::ALL, disp.as_deref(), pflags);
+        let encoded = build_update_packet(
+            uid,
+            iid,
+            PlayerUpdateResult::Change,
+            pid,
+            PlayerUpdateFlags::ALL,
+            disp.as_deref(),
+            pflags,
+        );
         return encoded;
     }
 
@@ -89,7 +97,10 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         return make_failure(uid, iid, "No valid update flags.");
     }
 
-    info!("PlayerUpdate: player {pid} in instance {iid} updated {result_flags:?}");
+    debug!(
+        "[PlayerUpdate] player {} in instance {} updated {:?}",
+        pid, iid, result_flags
+    );
 
     // Read updated values.
     let (disp, pflags) = {
@@ -107,26 +118,64 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
             .map(|p| p.client_id)
             .collect()
     };
-    let bcast = build_update_packet(0, iid, PlayerUpdateResult::Change, pid, result_flags, disp.as_deref(), pflags);
+    let bcast = build_update_packet(
+        0,
+        iid,
+        PlayerUpdateResult::Change,
+        pid,
+        result_flags,
+        disp.as_deref(),
+        pflags,
+    );
     for cid in other_cids {
         if let Some(arc) = state.clients.get(cid) {
             arc.read().try_push(bcast.clone());
         }
     }
 
-    build_update_packet(uid, iid, PlayerUpdateResult::Change, pid, result_flags, disp.as_deref(), pflags)
+    build_update_packet(
+        uid,
+        iid,
+        PlayerUpdateResult::Change,
+        pid,
+        result_flags,
+        disp.as_deref(),
+        pflags,
+    )
 }
 
-fn build_update(inst_arc: &crate::instance::ArcInstance, iid: u8, pid: u16, flags: PlayerUpdateFlags, state: &AppState) -> Bytes {
+fn build_update(
+    inst_arc: &crate::instance::ArcInstance,
+    iid: u8,
+    pid: u16,
+    flags: PlayerUpdateFlags,
+    state: &AppState,
+) -> Bytes {
     let (disp, pflags) = {
         let inst = inst_arc.read();
         let p = inst.get_player(pid).unwrap();
         (p.display.clone(), p.flags.bits())
     };
-    build_update_packet(0, iid, PlayerUpdateResult::Change, pid, flags, disp.as_deref(), pflags)
+    build_update_packet(
+        0,
+        iid,
+        PlayerUpdateResult::Change,
+        pid,
+        flags,
+        disp.as_deref(),
+        pflags,
+    )
 }
 
-fn build_update_packet(uid: u16, iid: u8, result: PlayerUpdateResult, pid: u16, flags: PlayerUpdateFlags, display: Option<&str>, player_flags: u32) -> Bytes {
+fn build_update_packet(
+    uid: u16,
+    iid: u8,
+    result: PlayerUpdateResult,
+    pid: u16,
+    flags: PlayerUpdateFlags,
+    display: Option<&str>,
+    player_flags: u32,
+) -> Bytes {
     let mut w = PacketWriter::new();
     w.write_u8(iid);
     w.write_u8(result as u8);

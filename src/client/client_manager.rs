@@ -1,6 +1,6 @@
-use std::sync::Arc;
 use dashmap::DashMap;
 use parking_lot::RwLock;
+use std::sync::Arc;
 
 use super::client::{ArcClient, Client};
 
@@ -12,7 +12,9 @@ pub struct ClientManager {
 
 impl ClientManager {
     pub fn new() -> Self {
-        Self { clients: DashMap::new() }
+        Self {
+            clients: DashMap::new(),
+        }
     }
 
     /// Insert a client. The client's `id` is used as the key.

@@ -1,15 +1,18 @@
-use std::collections::VecDeque;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 
 /// A single log entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogEntry {
     /// Unix millisecond timestamp.
     pub timestamp: i64,
-    /// Log level string: "info", "warn", "error", "debug".
+    /// Log level string: "error", "warning", "log", "debug".
     pub level: String,
     /// The log message.
     pub message: String,
+    /// Optional tag (e.g., "Auth", "Crypto") extracted from [Tag] prefix.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
 }
 
 /// Bounded ring-buffer of recent log entries.

@@ -18,7 +18,7 @@ use std::{net::SocketAddr, sync::Arc};
 use anyhow::Result;
 use quinn::Endpoint;
 use tracing::{error, info};
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::{
     client::ClientManager,
@@ -34,15 +34,35 @@ async fn main() -> Result<()> {
     // ── Config ────────────────────────────────────────────────────────────
     let config = Arc::new(Config::load().expect("failed to load config"));
 
-    // ── Tracing ───────────────────────────────────────────────────────────
+    // ── Log buffer setup ──────────────────────────────────────────────────
+    let log_buf = Arc::new(parking_lot::Mutex::new(
+        crate::utils::log_buffer::LogBuffer::new(10000),
+    ));
+    let log_forwarder = Arc::new(parking_lot::Mutex::new(None));
+
+    // ── Tracing with LogBufferLayer ───────────────────────────────────────
     let filter = if config.debug {
         EnvFilter::new("debug")
     } else {
         EnvFilter::new("info")
     };
-    tracing_subscriber::fmt().with_env_filter(filter).init();
 
-    info!("NoxRelay v{} starting on port {}", constants::VERSION, config.port);
+    let log_layer = crate::utils::log_layer::LogBufferLayer::new(
+        Arc::clone(&log_buf),
+        Arc::clone(&log_forwarder),
+    );
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_subscriber::fmt::layer())
+        .with(log_layer)
+        .init();
+
+    info!(
+        "[Relay] NoxRelay v{} starting on port {}",
+        constants::VERSION,
+        config.port
+    );
 
     // ── TLS + QUIC endpoint ───────────────────────────────────────────────
     let server_cfg = make_server_config(&[&config.use_address])?;
@@ -50,31 +70,34 @@ async fn main() -> Result<()> {
     let addr: SocketAddr = format!("0.0.0.0:{}", config.port).parse()?;
     let endpoint = Endpoint::server(server_cfg, addr)?;
 
-    info!("QUIC endpoint bound to {}", endpoint.local_addr()?);
+    info!("[Relay] QUIC endpoint bound to {}", endpoint.local_addr()?);
 
     // ── Shared state ──────────────────────────────────────────────────────
-    let clients   = Arc::new(ClientManager::new());
+    let clients = Arc::new(ClientManager::new());
     let instances = Arc::new(InstanceManager::new());
-    let master    = Arc::new(MasterClient::new(Arc::clone(&config)));
 
-    // Share the log buffer between AppState and MasterClient.
-    let log_buf = Arc::clone(&master.log_buf);
+    let master = Arc::new(MasterClient::new(
+        Arc::clone(&config),
+        Arc::clone(&clients),
+        Arc::clone(&instances),
+        Arc::clone(&log_buf),
+        Arc::clone(&log_forwarder),
+    ));
 
     let state = Arc::new(AppState::new(
         Arc::clone(&clients),
         Arc::clone(&instances),
         Arc::clone(&master),
         Arc::clone(&config),
-        log_buf,
+        Arc::clone(&log_buf),
     ));
 
     // ── MasterServer connection ────────────────────────────────────────────
     {
         let master_ref = Arc::clone(&master);
         tokio::spawn(async move {
-            master_ref.run(|| {
-                info!("[Master] Connection established");
-            }).await;
+            info!("[Master] Starting connection...");
+            master_ref.run().await;
         });
     }
 
@@ -83,6 +106,6 @@ async fn main() -> Result<()> {
         error!("[main] QUIC server error: {e}");
     }
 
-    info!("NoxRelay stopped");
+    info!("[Relay] NoxRelay stopped");
     Ok(())
 }

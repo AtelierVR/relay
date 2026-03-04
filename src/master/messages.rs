@@ -18,7 +18,11 @@ pub struct WsMessage<T> {
 
 impl<T: Serialize> WsMessage<T> {
     pub fn new(msg_type: impl Into<String>, data: T) -> Self {
-        Self { msg_type: msg_type.into(), data, id: None }
+        Self {
+            msg_type: msg_type.into(),
+            data,
+            id: None,
+        }
     }
 
     pub fn with_id(mut self, id: impl Into<String>) -> Self {
@@ -31,12 +35,14 @@ impl<T: Serialize> WsMessage<T> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelayStatus {
-    /// Instance list.
-    pub i: Vec<RelayInstance>,
-    /// Connected client list.
-    pub c: Vec<RelayClient>,
+    /// Active client count.
+    pub c: u32,
+    /// Active instance count.
+    pub i: u32,
     /// Max instances.
     pub m: u8,
+    /// Engine identifier.
+    pub e: String,
     /// Relay version string.
     pub v: String,
     /// Protocol version.
@@ -45,49 +51,8 @@ pub struct RelayStatus {
     pub u: i64,
     /// System specs.
     pub s: SpecsData,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RelayInstance {
-    /// Internal ID.
-    pub i: u8,
-    /// Master-server ID.
-    pub m: u32,
-    /// Players.
-    pub p: Vec<RelayPlayer>,
-    /// Flag names (snake_case strings).
-    pub f: Vec<String>,
-    /// World identifier string.
-    pub w: String,
-    /// Capacity.
-    pub c: u16,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RelayPlayer {
-    /// Player ID.
-    pub p: u16,
-    /// Client ID.
-    pub c: u16,
-    /// Display name.
-    pub d: String,
-    /// Flag names.
-    pub f: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RelayClient {
-    /// Client ID.
-    pub i: u16,
-    /// Platform.
-    pub p: String,
-    /// Engine.
-    pub e: String,
-    /// Remote address string.
-    pub a: String,
-    /// User identifier (`"{id}@{server}"`) if authenticated.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub u: Option<String>,
+    /// Connection addresses: proto -> "host:port" (e.g. {"quic": "0.0.0.0:30000"}).
+    pub a: std::collections::HashMap<String, String>,
 }
 
 // ─── resolve_user ────────────────────────────────────────────────────────────
@@ -112,7 +77,6 @@ pub struct ResolveUserResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResolveUserInfo {
     pub id: u32,
-    pub username: String,
     pub display: String,
     pub server: String,
 }
@@ -144,10 +108,28 @@ pub struct InstanceSpec {
 pub struct WorldSpec {
     pub id: u32,
     pub address: String,
+    #[serde(default)]
     pub version: u16,
 }
 
 // ─── relay_sync_instances ────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncInstancesReq {
+    pub instances: Vec<SyncInstanceData>,
+    pub relay_uptime: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncInstanceData {
+    pub master_id: u32,
+    pub internal_id: u32,
+    pub password: Option<String>,
+    pub capacity: u16,
+    pub player_count: usize,
+    pub world: String,
+    pub flags: String,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncInstancesResp {
@@ -185,4 +167,92 @@ pub struct LogsRequest {
     pub limit: usize,
 }
 
-fn default_limit() -> usize { 100 }
+fn default_limit() -> usize {
+    100
+}
+
+// ─── has_instance ────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HasInstanceReq {
+    pub id: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HasInstanceResp {
+    pub exists: bool,
+}
+
+// ─── get_clients ─────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetClientsReq {
+    #[serde(default)]
+    pub limit: usize,
+    #[serde(default)]
+    pub offset: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetClientsResp {
+    pub total: u32,
+    pub clients: Vec<ClientInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClientInfo {
+    pub i: String,         // client ID
+    pub a: String,         // address
+    pub p: String,         // platform
+    pub e: String,         // engine
+    pub u: Option<String>, // user identifier (optional)
+}
+
+// ─── ping ────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PingResponse {
+    pub time: i64,
+    pub received: i64,
+}
+
+// ─── command ─────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommandRequest {
+    pub content: String,
+}
+
+// ─── get_instances ───────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetInstancesReq {
+    #[serde(default)]
+    pub limit: usize,
+    #[serde(default)]
+    pub offset: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetInstancesResp {
+    pub total: u32,
+    pub instances: Vec<InstanceInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstanceInfo {
+    pub i: String,          // instance master ID
+    pub n: u32,             // internal ID
+    pub p: Vec<PlayerInfo>, // players
+    pub f: u32,             // flags
+    pub w: String,          // world
+    pub c: u16,             // capacity
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayerInfo {
+    pub i: String, // player ID
+    pub c: String, // client ID
+    pub d: String, // display name
+    pub f: u32,    // flags
+}

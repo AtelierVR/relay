@@ -22,7 +22,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     let inst_arc = match state.instances.get(iid) {
         Some(a) => a,
         None => {
-            debug!("Event: unknown instance {iid}");
+            debug!("[Event] unknown instance {}", iid);
             return;
         }
     };
@@ -32,7 +32,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         match inst.get_players().iter().find(|p| p.client_id == client_id) {
             Some(p) if p.is_ready() => p.id,
             _ => {
-                debug!("Event: not-ready player from client {client_id}");
+                debug!("[Event] not-ready player from client {}", client_id);
                 return;
             }
         }
@@ -41,7 +41,10 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     let name = r.read_i64();
     let data_len = r.read_u16();
     if data_len > 1024 {
-        debug!("Event: data too large ({data_len}) from client {client_id}");
+        debug!(
+            "[Event] data too large ({} bytes) from client {}",
+            data_len, client_id
+        );
         return;
     }
     let event_data = r.read_bytes(data_len as usize).to_vec();
@@ -53,7 +56,11 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         for _ in 0..count {
             let target_pid = r.read_u16();
             let inst = inst_arc.read();
-            if let Some(p) = inst.get_players().iter().find(|p| p.id == target_pid && p.is_ready()) {
+            if let Some(p) = inst
+                .get_players()
+                .iter()
+                .find(|p| p.id == target_pid && p.is_ready())
+            {
                 targets.push(p.client_id);
             }
         }

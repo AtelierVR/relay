@@ -13,12 +13,16 @@ pub struct World {
 
 impl World {
     pub fn new(master_id: u32, address: impl Into<String>, version: u16) -> Self {
-        Self { master_id, address: address.into(), version }
+        Self {
+            master_id,
+            address: address.into(),
+            version,
+        }
     }
 
-    /// `"{master_id}@{address}:{version}"`
+    /// `"{master_id}?v={version}@{address}"`
     pub fn to_identifier(&self) -> String {
-        format!("{}@{}:{}", self.master_id, self.address, self.version)
+        format!("{}?v={}@{}", self.master_id, self.version, self.address)
     }
 }
 

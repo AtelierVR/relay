@@ -19,11 +19,15 @@ pub struct PacketWriter {
 
 impl PacketWriter {
     pub fn new() -> Self {
-        Self { buf: BytesMut::new() }
+        Self {
+            buf: BytesMut::new(),
+        }
     }
 
     pub fn with_capacity(cap: usize) -> Self {
-        Self { buf: BytesMut::with_capacity(cap) }
+        Self {
+            buf: BytesMut::with_capacity(cap),
+        }
     }
 
     /// Consume the writer and return the finished bytes.
@@ -158,14 +162,18 @@ impl PacketReader {
     // ── Infallible reads (return 0 / default on underflow, matching C# Buffer) ──
 
     pub fn read_u8(&mut self) -> u8 {
-        if self.remaining() < 1 { return 0; }
+        if self.remaining() < 1 {
+            return 0;
+        }
         let v = self.data[self.offset];
         self.offset += 1;
         v
     }
 
     pub fn read_i16(&mut self) -> i16 {
-        if self.remaining() < 2 { return 0; }
+        if self.remaining() < 2 {
+            return 0;
+        }
         let v = i16::from_be_bytes([self.data[self.offset], self.data[self.offset + 1]]);
         self.offset += 2;
         v
@@ -176,7 +184,9 @@ impl PacketReader {
     }
 
     pub fn read_i32(&mut self) -> i32 {
-        if self.remaining() < 4 { return 0; }
+        if self.remaining() < 4 {
+            return 0;
+        }
         let v = i32::from_be_bytes(self.data[self.offset..self.offset + 4].try_into().unwrap());
         self.offset += 4;
         v
@@ -187,7 +197,9 @@ impl PacketReader {
     }
 
     pub fn read_i64(&mut self) -> i64 {
-        if self.remaining() < 8 { return 0; }
+        if self.remaining() < 8 {
+            return 0;
+        }
         let v = i64::from_be_bytes(self.data[self.offset..self.offset + 8].try_into().unwrap());
         self.offset += 8;
         v
@@ -199,7 +211,9 @@ impl PacketReader {
 
     /// Big-endian IEEE-754 single.
     pub fn read_f32(&mut self) -> f32 {
-        if self.remaining() < 4 { return 0.0; }
+        if self.remaining() < 4 {
+            return 0.0;
+        }
         let v = f32::from_be_bytes(self.data[self.offset..self.offset + 4].try_into().unwrap());
         self.offset += 4;
         v
@@ -207,7 +221,9 @@ impl PacketReader {
 
     /// Big-endian IEEE-754 double.
     pub fn read_f64(&mut self) -> f64 {
-        if self.remaining() < 8 { return 0.0; }
+        if self.remaining() < 8 {
+            return 0.0;
+        }
         let v = f64::from_be_bytes(self.data[self.offset..self.offset + 8].try_into().unwrap());
         self.offset += 8;
         v
@@ -216,7 +232,9 @@ impl PacketReader {
     /// `[u16 length][UTF-8 bytes]`  — mirrors `Buffer.ReadString()`.
     pub fn read_string(&mut self) -> Option<String> {
         let len = self.read_u16() as usize;
-        if self.remaining() < len { return None; }
+        if self.remaining() < len {
+            return None;
+        }
         let bytes = &self.data[self.offset..self.offset + len];
         let s = String::from_utf8(bytes.to_vec()).ok()?;
         self.offset += len;
@@ -231,8 +249,12 @@ impl PacketReader {
 
     /// Read exactly `len` raw bytes.
     pub fn read_bytes(&mut self, len: usize) -> Vec<u8> {
-        if len == 0 { return vec![]; }
-        if self.remaining() < len { return vec![]; }
+        if len == 0 {
+            return vec![];
+        }
+        if self.remaining() < len {
+            return vec![];
+        }
         let v = self.data[self.offset..self.offset + len].to_vec();
         self.offset += len;
         v
@@ -240,7 +262,9 @@ impl PacketReader {
 
     /// Three big-endian f32 → `Vec3`.
     pub fn read_vec3(&mut self) -> Vec3 {
-        if self.remaining() < 12 { return Vec3::ZERO; }
+        if self.remaining() < 12 {
+            return Vec3::ZERO;
+        }
         let x = self.read_f32();
         let y = self.read_f32();
         let z = self.read_f32();
@@ -249,7 +273,9 @@ impl PacketReader {
 
     /// Four big-endian f32 → `Quat` (X, Y, Z, W).
     pub fn read_quat(&mut self) -> Quat {
-        if self.remaining() < 16 { return Quat::IDENTITY; }
+        if self.remaining() < 16 {
+            return Quat::IDENTITY;
+        }
         let x = self.read_f32();
         let y = self.read_f32();
         let z = self.read_f32();

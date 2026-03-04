@@ -10,4 +10,5 @@ services:
       - ./config.json:/app/config.json:ro
     environment:
       - NOX_PORT=23032
+      - NOX_DEBUG=true
     restart: unless-stopped

@@ -51,7 +51,10 @@ fn always_returns_empty_bytes() {
     let _rx = register_client(&state, 1);
     set_handshaked(&state, 1);
     let resp = disconnect::handle(&state, 1, 0, Bytes::new());
-    assert!(resp.is_empty(), "disconnect handler must not return a packet");
+    assert!(
+        resp.is_empty(),
+        "disconnect handler must not return a packet"
+    );
 }
 
 #[test]
@@ -60,7 +63,10 @@ fn returns_empty_even_with_reason() {
     let _rx = register_client(&state, 1);
     set_handshaked(&state, 1);
     let resp = disconnect::handle(&state, 1, 0, reason_payload("test reason"));
-    assert!(resp.is_empty(), "disconnect handler must not return a packet even when reason is present");
+    assert!(
+        resp.is_empty(),
+        "disconnect handler must not return a packet even when reason is present"
+    );
 }
 
 // ─── Reason parsing ───────────────────────────────────────────────────────────
@@ -118,12 +124,17 @@ fn player_removed_from_instance_after_disconnect() {
         inst_w.add_player(p);
     }
 
-    assert_eq!(arc_inst.read().get_players().len(), 1, "setup: player should be in instance");
+    assert_eq!(
+        arc_inst.read().get_players().len(),
+        1,
+        "setup: player should be in instance"
+    );
 
     disconnect::handle(&state, 1, 0, Bytes::new());
 
     assert_eq!(
-        arc_inst.read().get_players().len(), 0,
+        arc_inst.read().get_players().len(),
+        0,
         "player must be removed from instance after disconnect"
     );
 }
@@ -155,8 +166,16 @@ fn player_removed_from_all_instances_after_disconnect() {
 
     disconnect::handle(&state, 5, 0, Bytes::new());
 
-    assert_eq!(arc_a.read().get_players().len(), 0, "instance A must be empty after disconnect");
-    assert_eq!(arc_b.read().get_players().len(), 0, "instance B must be empty after disconnect");
+    assert_eq!(
+        arc_a.read().get_players().len(),
+        0,
+        "instance A must be empty after disconnect"
+    );
+    assert_eq!(
+        arc_b.read().get_players().len(),
+        0,
+        "instance B must be empty after disconnect"
+    );
 }
 
 #[test]
@@ -226,7 +245,8 @@ fn disconnect_does_not_affect_other_clients() {
 
     // Instance B's player must be untouched.
     assert_eq!(
-        arc_b.read().get_players().len(), 1,
+        arc_b.read().get_players().len(),
+        1,
         "client 2's player must not be removed when client 1 disconnects"
     );
 }

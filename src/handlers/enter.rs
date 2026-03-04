@@ -13,7 +13,7 @@
 /// Broadcast Join: [iid][PlayerFlags][PlayerId][UserId][UserAddress][Display][CreatedAt][Engine][Platform]
 use bitflags::bitflags;
 use bytes::Bytes;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
     handlers::context::AppState,
@@ -39,29 +39,45 @@ bitflags! {
 
 #[repr(u8)]
 enum EnterResult {
-    Success           = 0,
-    NotFound          = 1,
-    Full              = 2,
-    Blacklisted       = 3,
-    NotWhitelisted    = 4,
-    InvalidGame       = 5,
+    Success = 0,
+    NotFound = 1,
+    Full = 2,
+    Blacklisted = 3,
+    NotWhitelisted = 4,
+    InvalidGame = 5,
     IncorrectPassword = 6,
-    Unknown           = 7,
-    Refused           = 8,
+    Unknown = 7,
+    Refused = 8,
     InvalidPseudonyme = 9,
 }
 
 pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
     let mut r = PacketReader::new(payload);
 
-    // Must be authenticated.
-    let client_arc = match state.clients.get(client_id) {
-        Some(a) if a.read().is_authenticated() => a,
-        _ => return Bytes::new(),
+    let iid = r.read_u8();
+    let enter_flags = EnterFlags::from_bits_truncate(r.read_u8());
+
+    // Check if this is a bot in debug mode (can skip auth)
+    let is_bot = enter_flags.contains(EnterFlags::AS_BOT);
+    let allow_no_auth = state.config.debug && is_bot;
+
+    // Must be authenticated (unless bot in debug mode).
+    let _client_arc = match state.clients.get(client_id) {
+        Some(a) if a.read().is_authenticated() || allow_no_auth => a,
+        _ => {
+            debug!("[Enter] client {client_id} attempted to enter instance {iid} but is not authenticated");
+            return Bytes::new();
+        }
     };
 
-    let iid = r.read_u8();
-    debug!("[Enter] client {client_id} → instance {iid}");
+    debug!(
+        "[Enter] client {client_id} → instance {iid}{}",
+        if allow_no_auth {
+            " (bot, auth bypassed)"
+        } else {
+            ""
+        }
+    );
 
     let inst_arc = match state.instances.get(iid) {
         Some(a) => a,
@@ -83,14 +99,17 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         }
     }
 
-    let enter_flags = EnterFlags::from_bits_truncate(r.read_u8());
-
     let mut p_flags = PlayerFlags::NONE;
 
     if enter_flags.contains(EnterFlags::AS_BOT) {
         let is_bot_allowed = inst_arc.read().flags.contains(InstanceFlags::AUTHORIZE_BOT);
         if !is_bot_allowed {
-            return make_error(uid, iid, EnterResult::Refused, Some("Bots are not authorized in this instance."));
+            return make_error(
+                uid,
+                iid,
+                EnterResult::Refused,
+                Some("Bots are not authorized in this instance."),
+            );
         }
         p_flags |= PlayerFlags::IS_BOT;
     }
@@ -112,7 +131,12 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
             String::new()
         };
         if !inst_arc.read().verify_password(&provided) {
-            return make_error(uid, iid, EnterResult::IncorrectPassword, Some("Incorrect password."));
+            return make_error(
+                uid,
+                iid,
+                EnterResult::IncorrectPassword,
+                Some("Incorrect password."),
+            );
         }
     }
 
@@ -129,6 +153,22 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         inst.add_player(player);
     }
 
+    // Log player entering with user info
+    let user_info = if let Some(arc) = state.clients.get(client_id) {
+        let c = arc.read();
+        if let Some(u) = &c.user {
+            format!("{}@{} (\"{}\")", u.id, u.address, u.display_name)
+        } else {
+            String::from("(unauthenticated)")
+        }
+    } else {
+        String::from("(unknown)")
+    };
+    info!(
+        "[Enter] player {} (client {}) entered instance {} | user={}",
+        player_id, client_id, iid, user_info
+    );
+
     // Promote master if none exists yet.
     {
         let mut inst = inst_arc.write();
@@ -142,11 +182,11 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
 
     // --- Send Enter response to the entering client. ---
     let enter_response = build_enter_response(state, client_id, inst_arc.clone(), player_id, uid);
-    
+
     // Push the response via the client's tx (the bidi task will return it).
     // Actually, for the bidi stream path, we return the response Bytes directly.
     // For in-instance broadcasts we use push channel.
-    
+
     // --- Broadcast Join to all other clients in the instance. ---
     broadcast_join(state, client_id, player_id, &inst_arc);
 
@@ -171,13 +211,35 @@ fn build_enter_response(
     };
     let c = client.read();
     let (user_id, user_addr, display) = if let Some(u) = &c.user {
-        (u.id, u.address.clone(), player.display.clone().unwrap_or_else(|| u.display_name.clone()))
+        (
+            u.id,
+            u.address.clone(),
+            player
+                .display
+                .clone()
+                .unwrap_or_else(|| u.display_name.clone()),
+        )
     } else {
-        (0u32, String::new(), player.display.clone().unwrap_or_else(|| format!("Player {}", player_id)))
+        (
+            0u32,
+            String::new(),
+            player
+                .display
+                .clone()
+                .unwrap_or_else(|| format!("Player {}", player_id)),
+        )
     };
 
-    let tps = if player.custom_tps != 0 { player.custom_tps } else { inst.tps };
-    let threshold = if player.custom_threshold != 0.0 { player.custom_threshold } else { inst.threshold };
+    let tps = if player.custom_tps != 0 {
+        player.custom_tps
+    } else {
+        inst.tps
+    };
+    let threshold = if player.custom_threshold != 0.0 {
+        player.custom_threshold
+    } else {
+        inst.threshold
+    };
 
     let mut w = PacketWriter::new();
     w.write_u8(inst.internal_id);
@@ -205,13 +267,31 @@ fn broadcast_join(
     let join_packet = {
         let inst = inst_arc.read();
         let player = inst.get_player(entering_player_id);
-        let Some(player) = player else { return; };
-        let Some(client_arc) = state.clients.get(entering_client_id) else { return; };
+        let Some(player) = player else {
+            return;
+        };
+        let Some(client_arc) = state.clients.get(entering_client_id) else {
+            return;
+        };
         let c = client_arc.read();
         let (user_id, user_addr, display) = if let Some(u) = &c.user {
-            (u.id, u.address.clone(), player.display.clone().unwrap_or_else(|| u.display_name.clone()))
+            (
+                u.id,
+                u.address.clone(),
+                player
+                    .display
+                    .clone()
+                    .unwrap_or_else(|| u.display_name.clone()),
+            )
         } else {
-            (0u32, String::new(), player.display.clone().unwrap_or_else(|| format!("Player {}", player.id)))
+            (
+                0u32,
+                String::new(),
+                player
+                    .display
+                    .clone()
+                    .unwrap_or_else(|| format!("Player {}", player.id)),
+            )
         };
 
         let mut w = PacketWriter::new();
@@ -274,13 +354,31 @@ fn build_existing_join(
     inst_arc: &std::sync::Arc<parking_lot::RwLock<crate::instance::Instance>>,
 ) -> Bytes {
     let inst = inst_arc.read();
-    let Some(player) = inst.get_player(player_id) else { return Bytes::new(); };
-    let Some(client_arc) = state.clients.get(other_cid) else { return Bytes::new(); };
+    let Some(player) = inst.get_player(player_id) else {
+        return Bytes::new();
+    };
+    let Some(client_arc) = state.clients.get(other_cid) else {
+        return Bytes::new();
+    };
     let c = client_arc.read();
     let (user_id, user_addr, display) = if let Some(u) = &c.user {
-        (u.id, u.address.clone(), player.display.clone().unwrap_or_else(|| u.display_name.clone()))
+        (
+            u.id,
+            u.address.clone(),
+            player
+                .display
+                .clone()
+                .unwrap_or_else(|| u.display_name.clone()),
+        )
     } else {
-        (0u32, String::new(), player.display.clone().unwrap_or_else(|| format!("Player {}", player_id)))
+        (
+            0u32,
+            String::new(),
+            player
+                .display
+                .clone()
+                .unwrap_or_else(|| format!("Player {}", player_id)),
+        )
     };
 
     let mut w = PacketWriter::new();

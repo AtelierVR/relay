@@ -1,10 +1,10 @@
 [package]
-name    = "nox-relay"
+name    = "noxrelay"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "nox-relay"
+name = "noxrelay"
 path = "src/main.rs"
 
 [dependencies]
@@ -27,6 +27,9 @@ byteorder = "1"
 # -- Cryptography --------------------------------------------------------
 ring   = "0.17"
 argon2 = "0.5"
+rsa    = { version = "0.9", features = ["sha2"] }
+sha2   = "0.10"
+hex    = "0.4"
 
 # -- JSON / config -------------------------------------------------------
 serde      = { version = "1", features = ["derive"] }

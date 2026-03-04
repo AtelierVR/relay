@@ -1,20 +1,59 @@
-# Rust
+# Rust build artifacts
 /target/
 Cargo.lock
 
-# IDE
+# IDE and editor files
 .vscode/
 .idea/
+*.iml
+.vs/
 *.swp
 *.swo
 *~
+Session.vim
+.vim/
+.helix/
+.zed/
+.project
+.cproject
+.settings/
+.favorites.json
+.dir-locals.el
 
-# OS
+# OS files
 .DS_Store
+desktop.ini
 Thumbs.db
 
-# Config
+# Configuration files (local)
 config.json
+.env
 
 # Logs
 *.log
+logs/
+
+# Build artifacts
+/bin/
+/obj/
+/dist/
+/build/
+
+# Docker volumes
+data/
+
+# Test coverage
+coverage/
+*.profraw
+*.profdata
+
+# Temporary files
+\#*
+\#*\#
+.#*
+
+# Tags
+tags
+tags.*
+TAGS
+TAGS.*

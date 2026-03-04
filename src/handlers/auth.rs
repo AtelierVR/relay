@@ -12,13 +12,20 @@
 ///   [Server: string]
 /// ```
 use bytes::Bytes;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
     client::{client::AuthState, user::User},
     handlers::context::AppState,
-    proto::{buffer::{PacketReader, PacketWriter}, header::encode_stream_packet, packet_type::PacketType},
-    utils::crypto::{random_bytes, sha256_fingerprint, verify_pkcs1v15_sha256},
+    proto::{
+        buffer::{PacketReader, PacketWriter},
+        header::encode_stream_packet,
+        packet_type::PacketType,
+    },
+    utils::{
+        crypto::{random_bytes, sha256_fingerprint, verify_pkcs1v15_sha256},
+        hex_fmt,
+    },
 };
 
 #[repr(u8)]
@@ -29,16 +36,21 @@ enum AuthAction {
 
 #[repr(u8)]
 enum AuthResult {
-    Success    = 0,
-    Challenge  = 1,
+    Success = 0,
+    Challenge = 1,
     MasterError = 2,
     Blacklisted = 3,
-    Invalid    = 4,
-    Signature  = 5,
-    Unknown    = 255,
+    Invalid = 4,
+    Signature = 5,
+    Unknown = 255,
 }
 
 pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
+    debug!(
+        "[Auth] client {}: raw payload: {}",
+        client_id,
+        hex_fmt::fmt_bytes(payload.as_ref(), 32)
+    );
     let mut r = PacketReader::new(payload);
 
     // Guard: must have completed handshake.
@@ -71,7 +83,7 @@ fn on_request_challenge(state: &AppState, client_id: u16, uid: u16) -> Bytes {
         c.challenge = challenge.clone();
         c.auth_state = AuthState::ChallengeIssued;
     }
-    debug!("[Auth] client {client_id} requested challenge");
+    debug!("[Auth] client {client_id}: challenge requested");
 
     let mut w = PacketWriter::new();
     w.write_u8(AuthResult::Challenge as u8);
@@ -80,7 +92,12 @@ fn on_request_challenge(state: &AppState, client_id: u16, uid: u16) -> Bytes {
     encode_stream_packet(uid, PacketType::Authentication, w.finish().as_ref())
 }
 
-async fn on_resolve_challenge(state: &AppState, client_id: u16, uid: u16, mut r: PacketReader) -> Bytes {
+async fn on_resolve_challenge(
+    state: &AppState,
+    client_id: u16,
+    uid: u16,
+    mut r: PacketReader,
+) -> Bytes {
     // Read challenge stored in client.
     let challenge = {
         match state.clients.get(client_id) {
@@ -90,33 +107,88 @@ async fn on_resolve_challenge(state: &AppState, client_id: u16, uid: u16, mut r:
     };
 
     if challenge.is_empty() {
-        return make_response(uid, AuthResult::Unknown, Some("No challenge requested."), None);
+        return make_response(
+            uid,
+            AuthResult::Unknown,
+            Some("No challenge requested."),
+            None,
+        );
     }
 
     let public_key = r.read_bytes_prefixed();
     if public_key.is_empty() {
-        return make_response(uid, AuthResult::Unknown, Some("No public key provided."), None);
+        return make_response(
+            uid,
+            AuthResult::Unknown,
+            Some("No public key provided."),
+            None,
+        );
     }
 
     let signature = r.read_bytes_prefixed();
     if signature.is_empty() {
-        return make_response(uid, AuthResult::Unknown, Some("No signature provided."), None);
+        return make_response(
+            uid,
+            AuthResult::Unknown,
+            Some("No signature provided."),
+            None,
+        );
     }
 
+    debug!(
+        "[Auth] client {}: challenge: {}",
+        client_id,
+        hex_fmt::fmt_bytes(challenge.as_slice(), 32)
+    );
+    debug!(
+        "[Auth] client {}: public_key: {}",
+        client_id,
+        hex_fmt::fmt_bytes(&public_key, 64)
+    );
+    debug!(
+        "[Auth] client {}: signature: {}",
+        client_id,
+        hex_fmt::fmt_bytes(&signature, 64)
+    );
+
     if !verify_pkcs1v15_sha256(&challenge, &signature, &public_key) {
-        warn!("[Auth] client {client_id}: invalid signature");
+        warn!("[Auth] client {}: invalid signature", client_id);
+        warn!(
+            "[Auth] client {}: verification failed for challenge: {}",
+            client_id,
+            hex_fmt::to_hex_str(challenge.as_slice(), 16)
+        );
+        warn!(
+            "[Auth] client {}: signature (first 32 bytes): {}",
+            client_id,
+            hex_fmt::to_hex_str(&signature[..signature.len().min(32)], 32)
+        );
+        warn!(
+            "[Auth] client {}: public_key (first 64 bytes): {}",
+            client_id,
+            hex_fmt::to_hex_str(&public_key[..public_key.len().min(64)], 64)
+        );
         return make_response(uid, AuthResult::Signature, Some("Invalid signature."), None);
     }
 
-    let user_id    = r.read_u32();
-    let server     = r.read_string().unwrap_or_default();
+    let user_id = r.read_u32();
+    let server = r.read_string().unwrap_or_default();
     let fingerprint = sha256_fingerprint(&public_key);
 
-    let resolve = match state.master.resolve_user(user_id, server.clone(), fingerprint).await {
+    let resolve = match state
+        .master
+        .resolve_user(user_id, server.clone(), fingerprint)
+        .await
+    {
         Ok(r) => r,
         Err(e) => {
             warn!("[Auth] client {client_id}: master error: {e}");
-            return make_response(uid, AuthResult::MasterError, Some("Failed to contact master server."), None);
+            return make_response(
+                uid,
+                AuthResult::MasterError,
+                Some("Failed to contact master server."),
+                None,
+            );
         }
     };
 
@@ -125,7 +197,6 @@ async fn on_resolve_challenge(state: &AppState, client_id: u16, uid: u16, mut r:
             if let Some(info) = resolve.user {
                 let user = User {
                     id: info.id,
-                    username: info.username,
                     display_name: info.display,
                     address: info.server,
                 };
@@ -134,7 +205,10 @@ async fn on_resolve_challenge(state: &AppState, client_id: u16, uid: u16, mut r:
                     c.user = Some(user.clone());
                     c.auth_state = AuthState::Authenticated;
                 }
-                debug!("[Auth] client {client_id} authenticated as {}@{}", user.id, user.address);
+                info!(
+                    "[Auth] client {} authenticated: user={}@{} display={}",
+                    client_id, user.id, user.address, user.display_name
+                );
                 let mut w = PacketWriter::new();
                 w.write_u8(AuthResult::Success as u8);
                 w.write_u32(user.id);
@@ -142,7 +216,12 @@ async fn on_resolve_challenge(state: &AppState, client_id: u16, uid: u16, mut r:
                 w.write_string(&user.display_name);
                 return encode_stream_packet(uid, PacketType::Authentication, w.finish().as_ref());
             }
-            make_response(uid, AuthResult::Unknown, Some("No user data in response."), None)
+            make_response(
+                uid,
+                AuthResult::Unknown,
+                Some("No user data in response."),
+                None,
+            )
         }
         "blacklisted" => {
             if let Some(arc) = state.clients.get(client_id) {
@@ -158,12 +237,22 @@ async fn on_resolve_challenge(state: &AppState, client_id: u16, uid: u16, mut r:
             if let Some(arc) = state.clients.get(client_id) {
                 arc.write().user = None;
             }
-            make_response(uid, AuthResult::Invalid, resolve.reason.as_deref().or(Some("Invalid user.")), None)
+            make_response(
+                uid,
+                AuthResult::Invalid,
+                resolve.reason.as_deref().or(Some("Invalid user.")),
+                None,
+            )
         }
     }
 }
 
-fn make_response(uid: u16, result: AuthResult, reason: Option<&str>, _extra: Option<&[u8]>) -> Bytes {
+fn make_response(
+    uid: u16,
+    result: AuthResult,
+    reason: Option<&str>,
+    _extra: Option<&[u8]>,
+) -> Bytes {
     let mut w = PacketWriter::new();
     w.write_u8(result as u8);
     if let Some(r) = reason {

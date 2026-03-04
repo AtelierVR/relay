@@ -11,7 +11,7 @@
 /// Response / Broadcast: [iid][ServerConfigResult::Change][flags][...values]
 use bitflags::bitflags;
 use bytes::Bytes;
-use tracing::{info};
+use tracing::debug;
 
 use crate::{
     handlers::context::AppState,
@@ -40,7 +40,7 @@ bitflags! {
 enum ServerConfigResult {
     Success = 0,
     Failure = 1,
-    Change  = 2,
+    Change = 2,
 }
 
 pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
@@ -91,7 +91,9 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     }
     if req_flags.contains(ServerConfigFlags::PASSWORD) {
         let pw = r.read_string().unwrap_or_default();
-        inst_arc.write().set_password(if pw.is_empty() { None } else { Some(pw) });
+        inst_arc
+            .write()
+            .set_password(if pw.is_empty() { None } else { Some(pw) });
         result_flags |= ServerConfigFlags::PASSWORD;
     }
     if req_flags.contains(ServerConfigFlags::FLAGS) {
@@ -104,16 +106,28 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         return make_failure(uid, iid, "No valid configuration flags.");
     }
 
-    info!("ServerConfig: player {player_id} in instance {iid} updated {result_flags:?}");
+    debug!(
+        "[ServerConfig] player {} in instance {} updated {:?}",
+        player_id, iid, result_flags
+    );
 
     // Collect players' IDs for broadcast.
     let player_ids: Vec<(u16, u16)> = {
         let inst = inst_arc.read();
-        inst.get_players().iter().map(|p| (p.id, p.client_id)).collect()
+        inst.get_players()
+            .iter()
+            .map(|p| (p.id, p.client_id))
+            .collect()
     };
 
     for (pid, cid) in &player_ids {
-        let resp = build_config_response(&inst_arc, iid, if cid == &client_id { uid } else { 0 }, result_flags, *pid);
+        let resp = build_config_response(
+            &inst_arc,
+            iid,
+            if cid == &client_id { uid } else { 0 },
+            result_flags,
+            *pid,
+        );
         if let Some(arc) = state.clients.get(*cid) {
             if cid == &client_id {
                 // Will be returned directly
@@ -126,9 +140,16 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     build_config_response(&inst_arc, iid, uid, result_flags, player_id)
 }
 
-fn build_config_response(inst_arc: &ArcInstance, iid: u8, uid: u16, flags: ServerConfigFlags, player_id: u16) -> Bytes {
+fn build_config_response(
+    inst_arc: &ArcInstance,
+    iid: u8,
+    uid: u16,
+    flags: ServerConfigFlags,
+    player_id: u16,
+) -> Bytes {
     let inst = inst_arc.read();
-    let (custom_tps, custom_threshold) = inst.get_player(player_id)
+    let (custom_tps, custom_threshold) = inst
+        .get_player(player_id)
         .map(|p| (p.custom_tps, p.custom_threshold))
         .unwrap_or((0, 0.0));
 
@@ -138,10 +159,18 @@ fn build_config_response(inst_arc: &ArcInstance, iid: u8, uid: u16, flags: Serve
     w.write_u8(flags.bits());
 
     if flags.contains(ServerConfigFlags::TPS) {
-        w.write_u8(if custom_tps != 0 { custom_tps } else { inst.tps });
+        w.write_u8(if custom_tps != 0 {
+            custom_tps
+        } else {
+            inst.tps
+        });
     }
     if flags.contains(ServerConfigFlags::THRESHOLD) {
-        w.write_f32(if custom_threshold != 0.0 { custom_threshold } else { inst.threshold });
+        w.write_f32(if custom_threshold != 0.0 {
+            custom_threshold
+        } else {
+            inst.threshold
+        });
     }
     if flags.contains(ServerConfigFlags::CAPACITY) {
         w.write_u16(inst.capacity);

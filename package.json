@@ -1,15 +1,31 @@
 {
-  "name": "nox-relay-rs",
+  "name": "nox-relay",
   "version": "0.1.0",
-  "description": "",
-  "main": "index.js",
+  "description": "High-performance QUIC relay server for the Nox platform",
   "scripts": {
-    "dev": "cargo build && .\\target\\debug\\nox-relay.exe",
+    "dev": "cargo build && ./target/debug/noxrelay",
     "build": "cargo build --release",
     "test": "cargo test",
-    "compose": "docker build . -t nox-relay-rs -t hactazia/nox-relay-rs"
+    "format": "cargo fmt --all",
+    "lint": "cargo clippy -- -D warnings",
+    "compose": "docker build . -t noxrelay -t hactazia/noxrelay",
+    "compose:dev": "docker build -f docker/Dockerfile.dev -t noxrelay:dev -t hactazia/noxrelay:dev .",
+    "compose:fast": "docker build -f docker/Dockerfile.fast -t noxrelay:fast -t hactazia/noxrelay:fast .",
+    "compose:sccache": "DOCKER_BUILDKIT=1 docker build -f docker/Dockerfile.sccache -t noxrelay:cached -t hactazia/noxrelay:cached ."
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AtelierVR/relay"
+  },
+  "keywords": [
+    "quic",
+    "relay",
+    "server",
+    "networking",
+    "rust",
+    "nox",
+    "websocket"
+  ],
+  "author": "Hactazia",
+  "license": "AGPL-3.0"
 }

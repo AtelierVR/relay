@@ -9,27 +9,37 @@
 /// [RemoteIP: bytes (4 or 16)][RemotePort: u16]
 /// [Flags: u8]
 /// (Flags.HasMaster ? [MasterAddress: string])
-/// [MaxPacketSize: u16][ConnectionTimeout: u16][KeepAliveInterval: u16][SegmentationTimeout: u16]
+/// [MaxPacketSize: u16][ConnectionTimeout: u16][KeepAliveInterval: u16]
 use std::net::IpAddr;
 
 use bytes::Bytes;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::{
     client::client::AuthState,
     constants::PROTOCOL_VERSION,
     handlers::context::AppState,
-    proto::{buffer::{PacketReader, PacketWriter}, header::encode_stream_packet, packet_type::PacketType},
+    proto::{
+        buffer::{PacketReader, PacketWriter},
+        header::encode_stream_packet,
+        packet_type::PacketType,
+    },
+    utils::hex_fmt,
 };
 
 /// Handshake flags (matches C# `HandshakeFlags`).
 #[repr(u8)]
 enum HandshakeFlags {
-    None      = 0,
+    None = 0,
     IsOffline = 1 << 0,
 }
 
 pub fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
+    debug!(
+        "[Handshake] client {}: raw payload: {}",
+        client_id,
+        hex_fmt::fmt_bytes(payload.as_ref(), 32)
+    );
     let mut r = PacketReader::new(payload);
     let protocol = r.read_u16();
 
@@ -38,18 +48,18 @@ pub fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Byt
         return Bytes::new();
     }
 
-    let engine   = r.read_string().unwrap_or_default();
+    let engine = r.read_string().unwrap_or_default();
     let platform = r.read_string().unwrap_or_default();
+
+    info!("[Handshake] client {client_id}: engine=\"{engine}\" platform=\"{platform}\"");
 
     // Update client state.
     if let Some(arc) = state.clients.get(client_id) {
         let mut c = arc.write();
-        c.engine   = engine;
+        c.engine = engine;
         c.platform = platform;
         c.auth_state = AuthState::Handshaked;
     }
-
-    debug!("[Handshake] client {client_id}");
 
     // Build response.
     let mut w = PacketWriter::new();
@@ -64,7 +74,11 @@ pub fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Byt
 
     let master_addr = &state.config.use_address;
     let has_master = !master_addr.is_empty();
-    let flags: u8 = if has_master { HandshakeFlags::None as u8 } else { HandshakeFlags::IsOffline as u8 };
+    let flags: u8 = if has_master {
+        HandshakeFlags::None as u8
+    } else {
+        HandshakeFlags::IsOffline as u8
+    };
     w.write_u8(flags);
     if has_master {
         w.write_string(master_addr);
@@ -73,7 +87,6 @@ pub fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Byt
     w.write_u16(crate::constants::MAX_PACKET_SIZE as u16);
     w.write_u16(state.config.connection_timeout);
     w.write_u16(state.config.keep_alive_interval);
-    w.write_u16(state.config.segmentation_timeout);
 
     encode_stream_packet(uid, PacketType::Handshake, w.finish().as_ref())
 }

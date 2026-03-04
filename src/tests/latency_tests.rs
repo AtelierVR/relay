@@ -8,7 +8,10 @@ use bytes::Bytes;
 
 use crate::{
     handlers::latency,
-    proto::{buffer::{PacketReader, PacketWriter}, packet_type::PacketType},
+    proto::{
+        buffer::{PacketReader, PacketWriter},
+        packet_type::PacketType,
+    },
 };
 
 use super::helpers::{decode_stream, make_state, register_client, set_handshaked};
@@ -47,7 +50,10 @@ fn handshaked_client_gets_response() {
     let _rx = register_client(&state, 1);
     set_handshaked(&state, 1);
     let resp = latency::handle(&state, 1, 5, latency_payload(1_700_000_000_000, 42));
-    assert!(!resp.is_empty(), "handshaked client must receive a response");
+    assert!(
+        !resp.is_empty(),
+        "handshaked client must receive a response"
+    );
 }
 
 #[test]
@@ -71,7 +77,10 @@ fn response_echoes_client_timestamp() {
     let (_, _, payload) = decode_stream(resp);
     let mut r = PacketReader::new(payload);
     let echoed_ts = r.read_i64();
-    assert_eq!(echoed_ts, client_ts, "first field must be the client's timestamp echoed back");
+    assert_eq!(
+        echoed_ts, client_ts,
+        "first field must be the client's timestamp echoed back"
+    );
 }
 
 #[test]
@@ -84,7 +93,10 @@ fn response_server_timestamp_is_positive() {
     let mut r = PacketReader::new(payload);
     r.skip(8); // skip echoed client_ts
     let server_ts = r.read_i64();
-    assert!(server_ts > 0, "server timestamp must be a positive Unix-ms value, got {server_ts}");
+    assert!(
+        server_ts > 0,
+        "server timestamp must be a positive Unix-ms value, got {server_ts}"
+    );
 }
 
 #[test]
@@ -99,7 +111,10 @@ fn response_echoes_client_long() {
     r.skip(8); // client_ts
     r.skip(8); // server_ts
     let echoed_long = r.read_i64();
-    assert_eq!(echoed_long, magic, "third field must be the client long echoed back");
+    assert_eq!(
+        echoed_long, magic,
+        "third field must be the client long echoed back"
+    );
 }
 
 #[test]
@@ -110,7 +125,11 @@ fn response_payload_is_exactly_24_bytes() {
     set_handshaked(&state, 1);
     let resp = latency::handle(&state, 1, 0, latency_payload(1, 2));
     let (_, _, payload) = decode_stream(resp);
-    assert_eq!(payload.len(), 24, "latency payload must be exactly 24 bytes");
+    assert_eq!(
+        payload.len(),
+        24,
+        "latency payload must be exactly 24 bytes"
+    );
 }
 
 #[test]
@@ -125,10 +144,13 @@ fn response_fields_order_matches_c_sharp() {
     let (_, _, payload) = decode_stream(resp);
     let mut r = PacketReader::new(payload);
     // 1) echoed client timestamp
-    assert_eq!(r.read_i64(), client_ts,   "field 1: echoed client_ts");
+    assert_eq!(r.read_i64(), client_ts, "field 1: echoed client_ts");
     // 2) server timestamp (just check it's non-zero and reasonable)
     let srv = r.read_i64();
-    assert!(srv > 1_000_000_000_000, "field 2: server timestamp must be a recent Unix ms");
+    assert!(
+        srv > 1_000_000_000_000,
+        "field 2: server timestamp must be a recent Unix ms"
+    );
     // 3) echoed client long
     assert_eq!(r.read_i64(), client_long, "field 3: echoed client_long");
     assert!(r.is_empty(), "no extra bytes");

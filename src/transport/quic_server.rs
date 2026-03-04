@@ -1,10 +1,10 @@
-use std::sync::Arc;
 use anyhow::Result;
 use quinn::Endpoint;
-use tracing::{error, info};
+use std::sync::Arc;
+use tracing::{debug, error, info};
 
-use crate::handlers::context::AppState;
 use super::connection::handle_connection;
+use crate::handlers::context::AppState;
 
 /// Accept-loop: waits for incoming QUIC connections and spawns a handler for each.
 pub async fn run(state: Arc<AppState>, endpoint: Endpoint) -> Result<()> {
@@ -16,7 +16,7 @@ pub async fn run(state: Arc<AppState>, endpoint: Endpoint) -> Result<()> {
             match incoming.await {
                 Ok(conn) => {
                     let remote = conn.remote_address();
-                    info!("[QuicServer] New connection from {remote}");
+                    debug!("[QuicServer] New connection from {remote}");
                     if let Err(e) = handle_connection(state, conn).await {
                         error!("[QuicServer] Connection error from {remote}: {e}");
                     }

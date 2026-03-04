@@ -1,0 +1,45 @@
+# Dockerfile avec sccache pour accélérer les recompilations
+FROM rust:1.88-alpine AS build
+
+# Installer sccache et dépendances
+RUN apk add --no-cache musl-dev curl && \
+    curl -L https://github.com/mozilla/sccache/releases/download/v0.8.2/sccache-v0.8.2-x86_64-unknown-linux-musl.tar.gz | tar xzf - && \
+    mv sccache-*/sccache /usr/local/bin/ && \
+    chmod +x /usr/local/bin/sccache
+
+# Configurer sccache comme rustc wrapper
+ENV RUSTC_WRAPPER=/usr/local/bin/sccache
+ENV SCCACHE_DIR=/app/sccache
+
+WORKDIR /app
+
+# Copier les manifests
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo "fn main(){}" > src/main.rs
+
+# Build des dépendances avec sccache
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    --mount=type=cache,target=/app/sccache \
+    cargo build --release && \
+    sccache --show-stats && \
+    rm -rf src
+
+# Copier le vrai code source
+COPY src ./src
+
+# Build final avec sccache
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/app/target \
+    --mount=type=cache,target=/app/sccache \
+    cargo build --release && \
+    sccache --show-stats && \
+    cp /app/target/release/noxrelay /app/noxrelay
+
+# Stage 2: Runtime
+FROM alpine:3.21 AS runtime
+RUN apk add --no-cache ca-certificates
+WORKDIR /app
+COPY --from=build /app/noxrelay ./noxrelay
+EXPOSE 23032/udp
+ENTRYPOINT ["./noxrelay"]
