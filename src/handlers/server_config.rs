@@ -69,7 +69,14 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
 
     // No flags → echo all current config to caller only.
     if req_flags.is_empty() {
-        return build_config_response(&inst_arc, iid, uid, ServerConfigFlags::ALL, player_id);
+        return build_config_response(
+            &inst_arc,
+            iid,
+            uid,
+            ServerConfigFlags::ALL,
+            player_id,
+            &state.config.load_balancing,
+        );
     }
 
     let mut result_flags = ServerConfigFlags::NONE;
@@ -127,6 +134,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
             if cid == &client_id { uid } else { 0 },
             result_flags,
             *pid,
+            &state.config.load_balancing,
         );
         if let Some(arc) = state.clients.get(*cid) {
             if cid == &client_id {
@@ -137,7 +145,14 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         }
     }
 
-    build_config_response(&inst_arc, iid, uid, result_flags, player_id)
+    build_config_response(
+        &inst_arc,
+        iid,
+        uid,
+        result_flags,
+        player_id,
+        &state.config.load_balancing,
+    )
 }
 
 fn build_config_response(
@@ -146,6 +161,7 @@ fn build_config_response(
     uid: u16,
     flags: ServerConfigFlags,
     player_id: u16,
+    lb_config: &crate::config::LoadBalancingConfig,
 ) -> Bytes {
     let inst = inst_arc.read();
     let (custom_tps, custom_threshold) = inst
@@ -162,14 +178,16 @@ fn build_config_response(
         w.write_u8(if custom_tps != 0 {
             custom_tps
         } else {
-            inst.tps
+            // Use adaptive TPS from load balancing
+            inst.get_player_tps(player_id, lb_config)
         });
     }
     if flags.contains(ServerConfigFlags::THRESHOLD) {
         w.write_f32(if custom_threshold != 0.0 {
             custom_threshold
         } else {
-            inst.threshold
+            // Use adaptive threshold from load balancing
+            inst.get_player_threshold(player_id, lb_config)
         });
     }
     if flags.contains(ServerConfigFlags::CAPACITY) {

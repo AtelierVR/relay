@@ -38,6 +38,8 @@ pub struct Instance {
     moderated: Vec<UserModerated>,
     /// Counter for custom view-group IDs (starts at `u32::from(u16::MAX) + 1`).
     next_view_group_id: u32,
+    /// Duration of the last tick in milliseconds (for load balancing).
+    pub last_tick_duration: f32,
 }
 
 impl Instance {
@@ -56,6 +58,7 @@ impl Instance {
             view_groups: Vec::new(),
             moderated: Vec::new(),
             next_view_group_id: u32::from(u16::MAX) + 1,
+            last_tick_duration: 0.0,
         }
     }
 
@@ -247,6 +250,80 @@ impl Instance {
 
     pub fn get_moderated_by_user(&self, user_id: u32, address: &str) -> Option<&UserModerated> {
         self.get_moderated(user_id, address)
+    }
+
+    // ── Load Balancing ────────────────────────────────────────────────────
+
+    /// Calculate adaptive TPS and threshold based on load.
+    /// Returns (effective_tps, effective_threshold).
+    pub fn calculate_adaptive_settings(
+        &self,
+        config: &crate::config::LoadBalancingConfig,
+    ) -> (u8, f32) {
+        if !config.enabled {
+            return (self.tps, self.threshold);
+        }
+
+        let player_count = self.players.len();
+
+        // Factor 1: Player count based on configured tiers
+        let player_factor = config
+            .tiers
+            .iter()
+            .find(|tier| player_count <= tier.max_players)
+            .map(|tier| tier.tps_factor)
+            .unwrap_or(0.60); // Fallback if no tier matches
+
+        // Factor 2: Performance (tick duration vs budget)
+        let tick_budget = 1000.0 / self.tps as f32;
+        let perf_factor = if self.last_tick_duration > tick_budget * config.perf_threshold {
+            // Exceeded threshold, reduce proportionally
+            (tick_budget * config.perf_threshold / self.last_tick_duration).max(0.5)
+        } else {
+            1.0
+        };
+
+        // Combine factors with configured weights
+        let combined = player_factor * config.player_weight + perf_factor * config.perf_weight;
+
+        // Calculate effective values
+        let effective_tps =
+            ((self.tps as f32 * combined).max(config.min_tps as f32) as u8).min(self.tps);
+        let effective_threshold = self.threshold * (1.0 + (1.0 - combined) * 0.5);
+
+        (effective_tps, effective_threshold)
+    }
+
+    /// Get the effective TPS for a specific player.
+    /// Returns custom TPS if set, otherwise adaptive TPS.
+    pub fn get_player_tps(
+        &self,
+        player_id: u16,
+        config: &crate::config::LoadBalancingConfig,
+    ) -> u8 {
+        if let Some(player) = self.get_player(player_id) {
+            if player.custom_tps != 0 {
+                return player.custom_tps;
+            }
+        }
+        let (tps, _) = self.calculate_adaptive_settings(config);
+        tps
+    }
+
+    /// Get the effective threshold for a specific player.
+    /// Returns custom threshold if set, otherwise adaptive threshold.
+    pub fn get_player_threshold(
+        &self,
+        player_id: u16,
+        config: &crate::config::LoadBalancingConfig,
+    ) -> f32 {
+        if let Some(player) = self.get_player(player_id) {
+            if player.custom_threshold != 0.0 {
+                return player.custom_threshold;
+            }
+        }
+        let (_, threshold) = self.calculate_adaptive_settings(config);
+        threshold
     }
 }
 

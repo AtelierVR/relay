@@ -28,7 +28,7 @@ pub struct Player {
     pub transforms: PlayerTransforms,
     /// Per-player TPS override (0 = use instance default).
     pub custom_tps: u8,
-    /// Per-player threshold override.
+    /// Per-player threshold override. (0.0 = use instance default).
     pub custom_threshold: f32,
 }
 

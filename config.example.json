@@ -6,5 +6,20 @@
   "max_instances": 3,
   "connection_timeout": 15,
   "keep_alive_interval": 5,
-  "debug": false
+  "debug": false,
+  "load_balancing": {
+    "enabled": true,
+    "update_interval": 5,
+    "min_tps": 5,
+    "player_weight": 0.6,
+    "perf_weight": 0.4,
+    "perf_threshold": 0.85,
+    "tiers": [
+      { "max_players": 15, "tps_factor": 1.0 },
+      { "max_players": 30, "tps_factor": 0.95 },
+      { "max_players": 50, "tps_factor": 0.85 },
+      { "max_players": 75, "tps_factor": 0.70 },
+      { "max_players": 9999, "tps_factor": 0.60 }
+    ]
+  }
 }

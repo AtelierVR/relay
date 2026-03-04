@@ -40,6 +40,64 @@ pub struct Config {
     /// Enable debug-level logging.
     #[serde(default)]
     pub debug: bool,
+
+    /// Load balancing configuration.
+    #[serde(default)]
+    pub load_balancing: LoadBalancingConfig,
+}
+
+/// Configuration for adaptive load balancing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoadBalancingConfig {
+    /// Enable adaptive load balancing.
+    #[serde(default = "default_lb_enabled")]
+    pub enabled: bool,
+
+    /// Update interval in seconds.
+    #[serde(default = "default_lb_update_interval")]
+    pub update_interval: u16,
+
+    /// Minimum TPS (never go below this).
+    #[serde(default = "default_lb_min_tps")]
+    pub min_tps: u8,
+
+    /// Weight for player count factor (0.0-1.0).
+    #[serde(default = "default_lb_player_weight")]
+    pub player_weight: f32,
+
+    /// Weight for performance factor (0.0-1.0).
+    #[serde(default = "default_lb_perf_weight")]
+    pub perf_weight: f32,
+
+    /// Performance threshold (tick time / budget ratio to trigger reduction).
+    #[serde(default = "default_lb_perf_threshold")]
+    pub perf_threshold: f32,
+
+    /// Player load tiers: [(max_players, tps_multiplier)].
+    #[serde(default = "default_lb_tiers")]
+    pub tiers: Vec<LoadTier>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoadTier {
+    /// Maximum player count for this tier.
+    pub max_players: usize,
+    /// TPS multiplier (0.0-1.0).
+    pub tps_factor: f32,
+}
+
+impl Default for LoadBalancingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_lb_enabled(),
+            update_interval: default_lb_update_interval(),
+            min_tps: default_lb_min_tps(),
+            player_weight: default_lb_player_weight(),
+            perf_weight: default_lb_perf_weight(),
+            perf_threshold: default_lb_perf_threshold(),
+            tiers: default_lb_tiers(),
+        }
+    }
 }
 
 impl Config {
@@ -79,4 +137,47 @@ fn default_connection_timeout() -> u16 {
 }
 fn default_keep_alive_interval() -> u16 {
     DEFAULT_KEEP_ALIVE_INTERVAL
+}
+
+fn default_lb_enabled() -> bool {
+    true
+}
+fn default_lb_update_interval() -> u16 {
+    5 // seconds
+}
+fn default_lb_min_tps() -> u8 {
+    5
+}
+fn default_lb_player_weight() -> f32 {
+    0.6
+}
+fn default_lb_perf_weight() -> f32 {
+    0.4
+}
+fn default_lb_perf_threshold() -> f32 {
+    0.85 // 85% of tick budget
+}
+fn default_lb_tiers() -> Vec<LoadTier> {
+    vec![
+        LoadTier {
+            max_players: 15,
+            tps_factor: 1.0,
+        },
+        LoadTier {
+            max_players: 30,
+            tps_factor: 0.95,
+        },
+        LoadTier {
+            max_players: 50,
+            tps_factor: 0.85,
+        },
+        LoadTier {
+            max_players: 75,
+            tps_factor: 0.70,
+        },
+        LoadTier {
+            max_players: usize::MAX,
+            tps_factor: 0.60,
+        },
+    ]
 }
