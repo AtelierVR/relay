@@ -5,7 +5,7 @@ pub const VERSION: &str = "0.1.0";
 
 // Default network settings.
 pub const DEFAULT_PORT: u16 = 23032;
-pub const DEFAULT_MASTER_GATEWAY: &str = "http://127.0.0.1:53032";
+pub const DEFAULT_NODE_GATEWAY: &str = "http://127.0.0.1:3042";
 pub const DEFAULT_USE_ADDRESS: &str = "127.0.0.1:23032";
 
 // Packet sizing.

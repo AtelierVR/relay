@@ -20,7 +20,7 @@ use crate::{
 pub fn make_state() -> AppState {
     let config = Arc::new(Config {
         port: 23032,
-        master_gateway: String::new(),
+        node_gateway: String::new(),
         use_address: DEFAULT_USE_ADDRESS.to_owned(),
         token: String::new(),
         max_instances: 3,

@@ -13,9 +13,9 @@ pub struct Config {
     #[serde(default = "default_port")]
     pub port: u16,
 
-    /// WebSocket URL of the MasterServer.
-    #[serde(default = "default_master_gateway")]
-    pub master_gateway: String,
+    /// WebSocket URL of the Node server.
+    #[serde(default = "default_node_gateway")]
+    pub node_gateway: String,
 
     /// Public address advertised to clients (e.g. "1.2.3.4:23032").
     #[serde(default = "default_use_address")]
@@ -65,8 +65,8 @@ impl Config {
 fn default_port() -> u16 {
     DEFAULT_PORT
 }
-fn default_master_gateway() -> String {
-    DEFAULT_MASTER_GATEWAY.to_owned()
+fn default_node_gateway() -> String {
+    DEFAULT_NODE_GATEWAY.to_owned()
 }
 fn default_use_address() -> String {
     DEFAULT_USE_ADDRESS.to_owned()

@@ -22,10 +22,13 @@ Copy `config.example.json` to `config.json` and edit:
 
 ```json
 {
-  "relay_address": "0.0.0.0:30000",
-  "master_url": "ws://localhost:3000/relay",
-  "relay_id": "relay-01",
-  "max_clients": 1000,
+  "port": 23032,
+  "node_gateway": "http://localhost:3042",
+  "use_address": "127.0.0.1:23032",
+  "token": "",
+  "max_instances": 3,
+  "connection_timeout": 15,
+  "keep_alive_interval": 5,
   "debug": false
 }
 ```
@@ -53,7 +56,7 @@ cargo test
 ## Features
 
 - QUIC transport with built-in encryption
-- WebSocket connection to master server
+- WebSocket connection to node server
 - Multi-instance support
 - RSA authentication + Argon2 hashing
 - Real-time system monitoring

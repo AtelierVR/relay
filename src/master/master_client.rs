@@ -393,7 +393,7 @@ impl MasterClient {
 
         loop {
             let cfg = &self.config;
-            let ws_url = Self::build_ws_url(&cfg.master_gateway);
+            let ws_url = Self::build_ws_url(&cfg.node_gateway);
 
             info!("[MasterClient] Connecting to {ws_url}");
 
@@ -775,8 +775,8 @@ impl MasterClient {
 
     // ── Utilities ────────────────────────────────────────────────────────
 
-    fn build_ws_url(master_gateway: &str) -> String {
-        let clean = master_gateway.trim_end_matches('/');
+    fn build_ws_url(node_gateway: &str) -> String {
+        let clean = node_gateway.trim_end_matches('/');
         if let Some(stripped) = clean.strip_prefix("https://") {
             format!("wss://{}/api/ws", stripped)
         } else if let Some(stripped) = clean.strip_prefix("http://") {
