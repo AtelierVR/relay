@@ -74,33 +74,6 @@ async fn main() -> Result<()> {
 
     info!("[Relay] QUIC endpoint bound to {}", endpoint.local_addr()?);
 
-    // ── Gateway discovery ─────────────────────────────────────────────────
-    info!(
-        "[Relay] Discovering node gateway from: {}",
-        config.node_gateway
-    );
-    let discovered_gateway = utils::node_discovery::find_node_gateway(&config.node_gateway)
-        .await
-        .unwrap_or_else(|e| {
-            info!(
-                "[Relay] Gateway discovery failed: {}, using config value",
-                e
-            );
-            config.node_gateway.clone()
-        });
-
-    if discovered_gateway != config.node_gateway {
-        info!(
-            "[Relay] Discovered gateway: {} (original: {})",
-            discovered_gateway, config.node_gateway
-        );
-    }
-
-    // Create modified config with discovered gateway
-    let mut config_modified = (*config).clone();
-    config_modified.node_gateway = discovered_gateway;
-    let config = Arc::new(config_modified);
-
     // ── Shared state ──────────────────────────────────────────────────────
     let clients = Arc::new(ClientManager::new());
     let instances = Arc::new(InstanceManager::new());
