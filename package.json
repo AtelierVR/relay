@@ -9,9 +9,7 @@
     "format": "cargo fmt --all",
     "lint": "cargo clippy -- -D warnings",
     "compose": "docker build . -t noxrelay -t hactazia/noxrelay",
-    "compose:dev": "docker build -f docker/Dockerfile.dev -t noxrelay:dev -t hactazia/noxrelay:dev .",
-    "compose:fast": "docker build -f docker/Dockerfile.fast -t noxrelay:fast -t hactazia/noxrelay:fast .",
-    "compose:sccache": "DOCKER_BUILDKIT=1 docker build -f docker/Dockerfile.sccache -t noxrelay:cached -t hactazia/noxrelay:cached ."
+    "compose:dev": "docker build -f docker/Dockerfile.dev -t noxrelay:dev -t hactazia/noxrelay:dev ."
   },
   "repository": {
     "type": "git",

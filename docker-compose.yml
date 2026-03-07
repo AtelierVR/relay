@@ -1,6 +1,6 @@
 services:
   relay:
-    image: hactazia/nox-relay-rs
+    image: noxrelay
     build:
       context: .
       dockerfile: Dockerfile

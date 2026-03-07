@@ -1,10 +1,10 @@
 # Stage 1: Build
 FROM rust:1.88-alpine AS build
-RUN apk add --no-cache musl-dev
+RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static
 WORKDIR /app
 
 # Copier les manifests et créer des dummies pour le cache
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml ./
 RUN mkdir src && echo "fn main(){}" > src/main.rs
 
 # Build des dépendances (layer avec cache)
@@ -18,8 +18,7 @@ COPY src ./src
 
 # Build final (réutilise les dépendances compilées)
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/app/target \
-    cargo build --release && \
+    cargo build --target-dir /app/target --release && \
     cp /app/target/release/noxrelay /app/noxrelay
 
 # Stage 2: Runtime
