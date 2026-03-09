@@ -28,9 +28,13 @@ pub fn make_server_config(san_addresses: &[&str]) -> Result<quinn::ServerConfig>
         rustls::pki_types::PrivatePkcs8KeyDer::from(key_pair.serialize_der()),
     );
 
-    let tls_config = ServerConfig::builder()
+    let mut tls_config = ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(vec![cert_der], key_der)?;
+
+    // Advertise the same ALPN token the C# client sends (QuicConnector.AlpnToken = "relay").
+    // Without this, quinn rejects the handshake with "peer doesn't support any known protocol".
+    tls_config.alpn_protocols = vec![b"relay".to_vec()];
 
     let quic_server_config =
         quinn::crypto::rustls::QuicServerConfig::try_from(Arc::new(tls_config))?;
