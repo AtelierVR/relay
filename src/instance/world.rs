@@ -28,6 +28,6 @@ impl World {
 
 impl Default for World {
     fn default() -> Self {
-        Self::new(0, "::", u16::MAX)
+        Self::new(0, crate::constants::SAFE_LOCAL_ADDRESS, u16::MAX)
     }
 }

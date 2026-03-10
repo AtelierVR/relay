@@ -2,13 +2,15 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use quinn::Connection;
+use tokio::sync::oneshot;
 use tracing::{debug, warn};
 
 use crate::{
     client::client::new_client,
     handlers::{
         context::AppState,
-        dispatcher::{dispatch_datagram, dispatch_stream},
+        dispatcher::dispatch,
+        packet::Packet,
     },
     proto::{
         frame::{parse_datagram, read_framed, write_framed},
@@ -68,8 +70,31 @@ pub async fn handle_connection(state: Arc<AppState>, conn: Connection) -> Result
                             }
                         };
 
-                        // Dispatch and collect response.
-                        let response = dispatch_stream(&state, client_id, header, payload).await;
+                        // Look up the client arc.
+                        let client_arc = match state.clients.get(client_id) {
+                            Some(a) => a,
+                            None => {
+                                debug!("[BiStream] client {} not found", client_id);
+                                return;
+                            }
+                        };
+
+                        // Create reply channel and packet.
+                        let (reply_tx, reply_rx) = oneshot::channel();
+                        let packet = Packet::new_stream(
+                            Arc::clone(&state),
+                            client_arc,
+                            header.packet_type,
+                            header.uid,
+                            payload,
+                            reply_tx,
+                        );
+
+                        // Dispatch; handler calls packet.reply*() internally.
+                        dispatch(packet).await;
+
+                        // Collect reply (empty bytes if handler sent no reply).
+                        let response = reply_rx.await.unwrap_or_default();
 
                         // Write response on the same stream.
                         if let Err(e) = write_framed(&mut send, &response).await {
@@ -99,8 +124,19 @@ pub async fn handle_connection(state: Arc<AppState>, conn: Connection) -> Result
                             continue;
                         }
                     };
-                    // Datagrams are fire-and-forget; response (if any) goes via push channel.
-                    dispatch_datagram(&state2c, client_id, header, payload).await;
+                    // Look up the client arc.
+                    let client_arc = match state2c.clients.get(client_id) {
+                        Some(a) => a,
+                        None => continue,
+                    };
+                    let packet = Packet::new_datagram(
+                        Arc::clone(&state2c),
+                        client_arc,
+                        header.packet_type,
+                        header.uid,
+                        payload,
+                    );
+                    dispatch(packet).await;
                 }
                 Err(e) => {
                     debug!("[Datagram] read error: {e}");

@@ -16,7 +16,7 @@ use bytes::Bytes;
 use tracing::{debug, info};
 
 use crate::{
-    handlers::context::AppState,
+    handlers::{context::AppState, packet::Packet},
     instance::InstanceFlags,
     player::{Player, PlayerFlags, PlayerStatus},
     proto::{
@@ -51,7 +51,12 @@ enum EnterResult {
     InvalidPseudonyme = 9,
 }
 
-pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
+pub async fn handle(mut packet: Packet) {
+    let state = packet.state.clone();
+    let client_id = packet.client_id();
+    let uid = packet.uid;
+    let payload = packet.payload.clone();
+
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();
@@ -66,7 +71,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         Some(a) if a.read().is_authenticated() || allow_no_auth => a,
         _ => {
             debug!("[Enter] client {client_id} attempted to enter instance {iid} but is not authenticated");
-            return Bytes::new();
+            return;
         }
     };
 
@@ -81,17 +86,17 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
 
     let inst_arc = match state.instances.get(iid) {
         Some(a) => a,
-        None => return make_error(uid, iid, EnterResult::NotFound, Some("Instance not found.")),
+        None => return packet.reply_raw(make_error(uid, iid, EnterResult::NotFound, Some("Instance not found."))),
     };
 
     // Check not already in instance.
     {
         let inst = inst_arc.read();
         if inst.get_players().iter().any(|p| p.client_id == client_id) {
-            return make_error(uid, iid, EnterResult::Unknown, Some("Already in instance."));
+            return packet.reply_raw(make_error(uid, iid, EnterResult::Unknown, Some("Already in instance.")));
         }
         if inst.is_full() {
-            return make_error(uid, iid, EnterResult::Full, Some("Instance is full."));
+            return packet.reply_raw(make_error(uid, iid, EnterResult::Full, Some("Instance is full.")));
         }
         // Moderation: blacklist check omitted for now (no user addresses in basic relay)
         if inst.flags.contains(InstanceFlags::USE_WHITELIST) {
@@ -104,12 +109,12 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     if enter_flags.contains(EnterFlags::AS_BOT) {
         let is_bot_allowed = inst_arc.read().flags.contains(InstanceFlags::AUTHORIZE_BOT);
         if !is_bot_allowed {
-            return make_error(
+            return packet.reply_raw(make_error(
                 uid,
                 iid,
                 EnterResult::Refused,
                 Some("Bots are not authorized in this instance."),
-            );
+            ));
         }
         p_flags |= PlayerFlags::IS_BOT;
     }
@@ -131,12 +136,12 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
             String::new()
         };
         if !inst_arc.read().verify_password(&provided) {
-            return make_error(
+            return packet.reply_raw(make_error(
                 uid,
                 iid,
                 EnterResult::IncorrectPassword,
                 Some("Incorrect password."),
-            );
+            ));
         }
     }
 
@@ -181,16 +186,16 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     }
 
     // --- Send Enter response to the entering client. ---
-    let enter_response = build_enter_response(state, client_id, inst_arc.clone(), player_id, uid);
+    let enter_response = build_enter_response(&state, client_id, inst_arc.clone(), player_id, uid);
 
     // Push the response via the client's tx (the bidi task will return it).
     // Actually, for the bidi stream path, we return the response Bytes directly.
     // For in-instance broadcasts we use push channel.
 
     // --- Broadcast Join to all other clients in the instance. ---
-    broadcast_join(state, client_id, player_id, &inst_arc);
+    broadcast_join(&state, client_id, player_id, &inst_arc);
 
-    enter_response
+    packet.reply_raw(enter_response);
 }
 
 fn build_enter_response(

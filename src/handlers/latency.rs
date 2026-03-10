@@ -4,10 +4,9 @@
 /// [ClientLong: i64]        ← opaque long sent by the client
 /// ```
 /// Response: `[ClientTimestamp: i64][ServerTimestamp: i64][ClientLong: i64]`
-use bytes::Bytes;
 
 use crate::{
-    handlers::context::AppState,
+    handlers::packet::Packet,
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
@@ -15,14 +14,18 @@ use crate::{
     },
 };
 
-pub fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
+pub fn handle(mut packet: Packet) {
+    let client_id = packet.client_id();
+    let uid = packet.uid;
+    let payload = packet.payload.clone();
+
     // Reject if not handshaked.
-    if let Some(arc) = state.clients.get(client_id) {
+    if let Some(arc) = packet.state.clients.get(client_id) {
         if !arc.read().is_handshaked() {
-            return Bytes::new();
+            return;
         }
     } else {
-        return Bytes::new();
+        return;
     }
 
     let mut r = PacketReader::new(payload);
@@ -38,5 +41,5 @@ pub fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Byt
     w.write_i64(client_ts); // echo client timestamp back
     w.write_i64(now_ms); // server timestamp
     w.write_i64(client_long); // echo client long back
-    encode_stream_packet(uid, PacketType::Latency, w.finish().as_ref())
+    packet.reply_raw(encode_stream_packet(uid, PacketType::Latency, w.finish().as_ref()));
 }

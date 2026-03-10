@@ -16,7 +16,7 @@ use tracing::{debug, info, warn};
 
 use crate::{
     client::{client::AuthState, user::User},
-    handlers::context::AppState,
+    handlers::{context::AppState, packet::Packet},
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
@@ -45,7 +45,12 @@ enum AuthResult {
     Unknown = 255,
 }
 
-pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
+pub async fn handle(mut packet: Packet) {
+    let state = packet.state.clone();
+    let client_id = packet.client_id();
+    let uid = packet.uid;
+    let payload = packet.payload.clone();
+
     debug!(
         "[Auth] client {}: raw payload: {}",
         client_id,
@@ -56,24 +61,25 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     // Guard: must have completed handshake.
     let arc = match state.clients.get(client_id) {
         Some(a) => a,
-        None => return Bytes::new(),
+        None => return,
     };
     {
         let c = arc.read();
         if !c.is_handshaked() || c.is_authenticated() {
-            return Bytes::new();
+            return;
         }
     }
 
     let action = r.read_u8();
 
-    if action == AuthAction::RequestChallenge as u8 {
-        on_request_challenge(state, client_id, uid)
+    let response = if action == AuthAction::RequestChallenge as u8 {
+        on_request_challenge(&state, client_id, uid)
     } else if action == AuthAction::ResolveChallenge as u8 {
-        on_resolve_challenge(state, client_id, uid, r).await
+        on_resolve_challenge(&state, client_id, uid, r).await
     } else {
         make_response(uid, AuthResult::Unknown, Some("Invalid action."), None)
-    }
+    };
+    packet.reply_raw(response);
 }
 
 fn on_request_challenge(state: &AppState, client_id: u16, uid: u16) -> Bytes {

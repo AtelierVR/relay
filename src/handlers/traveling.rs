@@ -12,7 +12,8 @@ use bytes::Bytes;
 use tracing::debug;
 
 use crate::{
-    handlers::context::AppState,
+    constants::SAFE_LOCAL_ADDRESS,
+    handlers::{context::AppState, packet::Packet},
     player::PlayerStatus,
     proto::{
         buffer::{PacketReader, PacketWriter},
@@ -49,19 +50,24 @@ enum TravelingResults {
     Ready = 1 << 5,
 }
 
-pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
+pub async fn handle(mut packet: Packet) {
+    let state = packet.state.clone();
+    let client_id = packet.client_id();
+    let uid = packet.uid;
+    let payload = packet.payload.clone();
+
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();
     let inst_arc = match state.instances.get(iid) {
         Some(a) => a,
         None => {
-            return make_response(
+            return packet.reply_raw(make_response(
                 uid,
                 iid,
                 TravelingResults::Unknown,
                 Some("Instance not found."),
-            )
+            ))
         }
     };
 
@@ -70,30 +76,30 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         match inst.get_players().iter().find(|p| p.client_id == client_id) {
             Some(p) => p.id,
             None => {
-                return make_response(
+                return packet.reply_raw(make_response(
                     uid,
                     iid,
                     TravelingResults::Unknown,
                     Some("You are not in the instance."),
-                )
+                ))
             }
         }
     };
 
     let action = match TravelingAction::from_u8(r.read_u8()) {
         Some(a) => a,
-        None => return make_response(uid, iid, TravelingResults::Unknown, Some("Unknown action.")),
+        None => return packet.reply_raw(make_response(uid, iid, TravelingResults::Unknown, Some("Unknown action."))),
     };
 
     match action {
-        TravelingAction::Travel => do_travel(state, uid, iid, self_player_id, &inst_arc),
-        TravelingAction::Ready => do_ready(state, uid, iid, self_player_id, &inst_arc),
-        TravelingAction::Failed => Bytes::new(),
+        TravelingAction::Travel => packet.reply_raw(do_travel(&state, uid, iid, self_player_id, &inst_arc)),
+        TravelingAction::Ready => packet.reply_raw(do_ready(&state, uid, iid, self_player_id, &inst_arc)),
+        TravelingAction::Failed => {}
     }
 }
 
 fn do_travel(
-    _state: &AppState,
+    state: &AppState,
     uid: u16,
     iid: u8,
     player_id: u16,
@@ -126,7 +132,12 @@ fn do_travel(
                 Some("World is not set for the instance."),
             );
         }
-        (w.master_id, w.address.clone(), w.version)
+        let address = if w.address == SAFE_LOCAL_ADDRESS {
+            state.config.node_address.clone()
+        } else {
+            w.address.clone()
+        };
+        (w.master_id, address, w.version)
     };
 
     // Update player status to Traveling.

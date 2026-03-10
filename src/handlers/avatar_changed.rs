@@ -9,7 +9,7 @@ use tracing::debug;
 
 use crate::{
     avatar::Avatar,
-    handlers::context::AppState,
+    handlers::packet::Packet,
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
@@ -24,13 +24,18 @@ enum AvatarChangedResult {
     Success = 3,
 }
 
-pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
+pub async fn handle(mut packet: Packet) {
+    let state = packet.state.clone();
+    let client_id = packet.client_id();
+    let uid = packet.uid;
+    let payload = packet.payload.clone();
+
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();
     let inst_arc = match state.instances.get(iid) {
         Some(a) => a,
-        None => return make_error(uid, iid, "Invalid instance"),
+        None => return packet.reply_raw(make_error(uid, iid, "Invalid instance")),
     };
 
     // Self player must be ready.
@@ -38,7 +43,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         let inst = inst_arc.read();
         match inst.get_players().iter().find(|p| p.client_id == client_id) {
             Some(p) if p.is_ready() => p.id,
-            _ => return make_error(uid, iid, "You are not a valid player"),
+            _ => return packet.reply_raw(make_error(uid, iid, "You are not a valid player")),
         }
     };
 
@@ -50,7 +55,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         let inst = inst_arc.read();
         let op = match inst.get_players().iter().find(|p| p.id == pid) {
             Some(p) if p.is_ready() => p,
-            _ => return make_error(uid, iid, "Player not found"),
+            _ => return packet.reply_raw(make_error(uid, iid, "Player not found")),
         };
 
         let self_p = inst
@@ -60,11 +65,11 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
             .unwrap();
         // A player is "allowed" to operate on another if they have privilege (matches C# IsAllowed).
         if !self_p.has_privilege() {
-            return make_error(
+            return packet.reply_raw(make_error(
                 uid,
                 iid,
                 "You are not allowed to change this player's avatar",
-            );
+            ));
         }
         op.id
     } else {
@@ -113,7 +118,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     let mut w = PacketWriter::new();
     w.write_u8(iid);
     w.write_u8(AvatarChangedResult::Success as u8);
-    encode_stream_packet(uid, PacketType::AvatarChanged, w.finish().as_ref())
+    packet.reply_raw(encode_stream_packet(uid, PacketType::AvatarChanged, w.finish().as_ref()));
 }
 
 fn build_broadcast(iid: u8, player_id: u16, avatar: &Avatar) -> Bytes {

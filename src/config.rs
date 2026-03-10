@@ -17,9 +17,9 @@ pub struct Config {
     #[serde(default = "default_node_gateway")]
     pub node_gateway: String,
 
-    /// Public address advertised to clients (e.g. "1.2.3.4:23032").
-    #[serde(default = "default_use_address")]
-    pub use_address: String,
+    /// Public Node server address advertised to clients (e.g. "hactazia.fr:53032").
+    #[serde(default = "default_node_address")]
+    pub node_address: String,
 
     /// Bearer token for MasterServer authentication.
     #[serde(default)]
@@ -126,8 +126,8 @@ fn default_port() -> u16 {
 fn default_node_gateway() -> String {
     DEFAULT_NODE_GATEWAY.to_owned()
 }
-fn default_use_address() -> String {
-    DEFAULT_USE_ADDRESS.to_owned()
+fn default_node_address() -> String {
+    DEFAULT_NODE_ADDRESS.to_owned()
 }
 fn default_max_instances() -> u8 {
     DEFAULT_MAX_INSTANCES

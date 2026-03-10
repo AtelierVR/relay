@@ -14,11 +14,11 @@ use bytes::Bytes;
 use tracing::debug;
 
 use crate::{
-    handlers::context::AppState,
+    handlers::{context::AppState, packet::Packet},
     instance::{ArcInstance, InstanceFlags},
     proto::{
         buffer::{PacketReader, PacketWriter},
-        header::{encode_stream_packet, encode_datagram},
+        header::{encode_datagram, encode_stream_packet},
         packet_type::PacketType,
     },
 };
@@ -46,13 +46,18 @@ enum ServerConfigResult {
     Change = 2,
 }
 
-pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
+pub async fn handle(mut packet: Packet) {
+    let state = packet.state.clone();
+    let client_id = packet.client_id();
+    let uid = packet.uid;
+    let payload = packet.payload.clone();
+
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();
     let inst_arc = match state.instances.get(iid) {
         Some(a) => a,
-        None => return make_failure(uid, iid, "Instance not found."),
+        None => return packet.reply_raw(make_failure(uid, iid, "Instance not found.")),
     };
 
     let player_id = {
@@ -60,11 +65,11 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         match inst.get_players().iter().find(|p| p.client_id == client_id) {
             Some(p) => {
                 if !p.has_high_privilege() {
-                    return make_failure(uid, iid, "Permission denied.");
+                    return packet.reply_raw(make_failure(uid, iid, "Permission denied."));
                 }
                 p.id
             }
-            None => return make_failure(uid, iid, "You are not in this instance."),
+            None => return packet.reply_raw(make_failure(uid, iid, "You are not in this instance.")),
         }
     };
 
@@ -72,14 +77,14 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
 
     // No flags → echo all current config to caller only.
     if req_flags.is_empty() {
-        return build_config_response(
+        return packet.reply_raw(build_config_response(
             &inst_arc,
             iid,
             uid,
             ServerConfigFlags::ALL,
             player_id,
             &state.config.load_balancing,
-        );
+        ));
     }
 
     let mut result_flags = ServerConfigFlags::NONE;
@@ -118,7 +123,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     }
 
     if result_flags.is_empty() {
-        return make_failure(uid, iid, "No valid configuration flags.");
+        return packet.reply_raw(make_failure(uid, iid, "No valid configuration flags."));
     }
 
     debug!(
@@ -144,23 +149,12 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
             *pid,
             &state.config.load_balancing,
         );
-        if let Some(arc) = state.clients.get(*cid) {
-            if cid == &client_id {
-                // Will be returned directly
-            } else {
-                arc.read().try_push(resp);
-            }
+        if cid == &client_id {
+            packet.reply_raw(resp);
+        } else if let Some(arc) = state.clients.get(*cid) {
+            arc.read().try_push(resp);
         }
     }
-
-    build_config_response(
-        &inst_arc,
-        iid,
-        uid,
-        result_flags,
-        player_id,
-        &state.config.load_balancing,
-    )
 }
 
 fn build_config_response(

@@ -2,11 +2,10 @@
 ///
 /// Datagram: [iid: u8][player_id: u16][sample: bytes(remaining)]
 /// Broadcast: [iid: u8][player_id: u16][sample: bytes]
-use bytes::Bytes;
 use tracing::debug;
 
 use crate::{
-    handlers::context::AppState,
+    handlers::packet::Packet,
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_datagram,
@@ -14,7 +13,10 @@ use crate::{
     },
 };
 
-pub async fn handle(state: &AppState, client_id: u16, _uid: u16, payload: Bytes) {
+pub async fn handle(packet: Packet) {
+    let state = &packet.state;
+    let client_id = packet.client_id();
+    let payload = packet.payload.clone();
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();

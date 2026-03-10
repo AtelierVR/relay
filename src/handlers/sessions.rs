@@ -4,12 +4,12 @@
 /// Response: [instances_on_page: u8][...instance_records][page: u8][total_pages: u8]
 ///
 /// Each instance record: [flags: u32][iid: u8][master_id: u32][player_count: u16][capacity: u16]
-use bytes::Bytes;
+
 use tracing::debug;
 
 use crate::{
     constants::MAX_PACKET_SIZE,
-    handlers::context::AppState,
+    handlers::packet::Packet,
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
@@ -21,20 +21,24 @@ use crate::{
 // One instance record size (fixed): flags(4) + iid(1) + master_id(4) + count(2) + capacity(2) = 13 bytes
 const RECORD_SIZE: usize = 13;
 
-pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
+pub async fn handle(mut packet: Packet) {
+    let client_id = packet.client_id();
+    let uid = packet.uid;
+    let payload = packet.payload.clone();
+
     debug!(
         "[Sessions] client {}: raw payload: {}",
         client_id,
         hex_fmt::fmt_bytes(payload.as_ref(), 32)
     );
     // Must have at least handshaked.
-    let is_ok = state
+    let is_ok = packet.state
         .clients
         .get(client_id)
         .map(|a| a.read().is_handshaked())
         .unwrap_or(false);
     if !is_ok {
-        return Bytes::new();
+        return;
     }
 
     let mut r = PacketReader::new(payload);
@@ -44,7 +48,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     // Collect all instance records.
     let records: Vec<(u32, u8, u32, u16, u16)> = {
         let mut list = Vec::new();
-        state.instances.for_each(|_, inst_arc| {
+        packet.state.instances.for_each(|_, inst_arc| {
             let inst = inst_arc.read();
             list.push((
                 inst.flags.bits(),
@@ -81,5 +85,5 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     w.write_u8(page);
     w.write_u8(total_pages);
 
-    encode_stream_packet(uid, PacketType::Sessions, w.finish().as_ref())
+    packet.reply_raw(encode_stream_packet(uid, PacketType::Sessions, w.finish().as_ref()));
 }

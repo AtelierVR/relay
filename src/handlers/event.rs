@@ -3,11 +3,10 @@
 /// Request:  [iid: u8][name: i64][data_len: u16][data: bytes]
 ///           (?[target_count: u8][target_ids: u16 × count])
 /// Broadcast: [iid][player_id: u16][name: i64][data_len: u16][data: bytes]
-use bytes::Bytes;
 use tracing::debug;
 
 use crate::{
-    handlers::context::AppState,
+    handlers::packet::Packet,
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
@@ -15,7 +14,10 @@ use crate::{
     },
 };
 
-pub async fn handle(state: &AppState, client_id: u16, _uid: u16, payload: Bytes) {
+pub async fn handle(packet: Packet) {
+    let state = &packet.state;
+    let client_id = packet.client_id();
+    let payload = packet.payload.clone();
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();

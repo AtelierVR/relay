@@ -8,6 +8,19 @@ use quinn::Connection;
 
 use super::user::User;
 use crate::constants::CLIENT_TX_BUFFER;
+use crate::proto::{
+    header::{encode_datagram, encode_stream_packet},
+    packet_type::PacketType,
+};
+
+/// Whether to send via a reliable QUIC stream or an unreliable datagram.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SendType {
+    /// Reliable: pushed to the outgoing uni-stream channel.
+    Stream,
+    /// Best-effort: sent as a QUIC datagram.
+    Datagram,
+}
 
 /// An enum indicating the authentication phase of a client.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,6 +93,24 @@ impl Client {
     /// Send a datagram (for broadcasts). Returns `true` on success.
     pub fn send_datagram(&self, packet: Bytes) -> bool {
         self.conn.send_datagram(packet).is_ok()
+    }
+
+    /// Encode and send a packet via the specified transport.
+    ///
+    /// - [`SendType::Stream`]: encodes as a stream packet and pushes to the
+    ///   outgoing push channel (opened as a QUIC uni-stream by the push writer).
+    /// - [`SendType::Datagram`]: encodes as a datagram and sends immediately.
+    ///
+    /// Returns `true` on success.
+    pub fn send(&self, payload: Bytes, ptype: PacketType, uid: u16, send_type: SendType) -> bool {
+        match send_type {
+            SendType::Stream => {
+                self.try_push(encode_stream_packet(uid, ptype, payload.as_ref()))
+            }
+            SendType::Datagram => {
+                self.send_datagram(encode_datagram(uid, ptype, payload.as_ref()))
+            }
+        }
     }
 }
 

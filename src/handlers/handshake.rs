@@ -1,16 +1,14 @@
-use bytes::Bytes;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 use crate::{
     client::client::AuthState,
     constants::PROTOCOL_VERSION,
-    handlers::context::AppState,
+    handlers::packet::Packet,
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
         packet_type::PacketType,
     },
-    utils::hex_fmt,
 };
 
 /// Handshake flags (matches C# `HandshakeFlags`).
@@ -20,13 +18,18 @@ enum HandshakeFlags {
     IsOffline = 1 << 0,
 }
 
-pub fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
+pub fn handle(mut packet: Packet) {
+    let state = &packet.state;
+    let client_id = packet.client_id();
+    let uid = packet.uid;
+    let payload = packet.payload.clone();
+
     let mut r = PacketReader::new(payload);
     let protocol = r.read_u16();
 
     if protocol != PROTOCOL_VERSION {
         warn!("[Handshake] client {client_id}: incompatible protocol {protocol} (expected {PROTOCOL_VERSION})");
-        return Bytes::new();
+        return;
     }
 
     let engine = r.read_string().unwrap_or_default();
@@ -53,7 +56,7 @@ pub fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Byt
     w.write_bytes(&ip_bytes);
     w.write_u16(0); // port
 
-    let master_addr = &state.config.use_address;
+    let master_addr = &state.config.node_address;
     let has_master = !master_addr.is_empty();
     let flags: u8 = if has_master {
         HandshakeFlags::None as u8
@@ -69,5 +72,5 @@ pub fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Byt
     w.write_u16(state.config.connection_timeout);
     w.write_u16(state.config.keep_alive_interval);
 
-    encode_stream_packet(uid, PacketType::Handshake, w.finish().as_ref())
+    packet.reply_raw(encode_stream_packet(uid, PacketType::Handshake, w.finish().as_ref()));
 }

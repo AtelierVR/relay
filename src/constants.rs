@@ -6,7 +6,10 @@ pub const VERSION: &str = "0.1.0";
 // Default network settings.
 pub const DEFAULT_PORT: u16 = 23032;
 pub const DEFAULT_NODE_GATEWAY: &str = "http://127.0.0.1:3042";
-pub const DEFAULT_USE_ADDRESS: &str = "127.0.0.1:23032";
+pub const DEFAULT_NODE_ADDRESS: &str = "127.0.0.1:23032";
+
+// Special world address meaning "use the relay's own public address".
+pub const SAFE_LOCAL_ADDRESS: &str = "::";
 
 // Packet sizing.
 pub const MAX_PACKET_SIZE: usize = 1029; // 1024 payload + 5 header bytes

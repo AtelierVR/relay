@@ -1,7 +1,4 @@
-use crate::handlers::context::AppState;
 /// Teleport handler — stub (no C# implementation yet).
-use bytes::Bytes;
+use crate::handlers::packet::Packet;
 
-pub async fn handle(_state: &AppState, _client_id: u16, _uid: u16, _payload: Bytes) -> Bytes {
-    Bytes::new()
-}
+pub async fn handle(_packet: Packet) {}

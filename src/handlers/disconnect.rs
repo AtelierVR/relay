@@ -4,16 +4,19 @@
 /// ```
 /// Guard: must be handshaked.
 /// Leaves all instances and closes the connection gracefully.
-use bytes::Bytes;
 use tracing::{debug, info};
 
 use crate::{
-    handlers::{context::AppState, quit::leave_all_instances},
+    handlers::{packet::Packet, quit::leave_all_instances},
     proto::buffer::PacketReader,
     utils::hex_fmt,
 };
 
-pub fn handle(state: &AppState, client_id: u16, _uid: u16, payload: Bytes) -> Bytes {
+pub fn handle(packet: Packet) {
+    let state = &packet.state;
+    let client_id = packet.client_id();
+    let payload = packet.payload.clone();
+
     debug!(
         "[Disconnect] client {}: raw payload: {}",
         client_id,
@@ -26,7 +29,7 @@ pub fn handle(state: &AppState, client_id: u16, _uid: u16, payload: Bytes) -> By
         .map(|a| a.read().is_handshaked())
         .unwrap_or(false);
     if !is_handshaked {
-        return Bytes::new();
+        return;
     }
 
     // Optional reason string (Remaining() > 2 in C# = at least u16 length prefix + 1 byte).
@@ -63,6 +66,4 @@ pub fn handle(state: &AppState, client_id: u16, _uid: u16, payload: Bytes) -> By
 
     // Leave all instances (broadcasts Leave to remaining ready players).
     leave_all_instances(state, client_id);
-
-    Bytes::new()
 }

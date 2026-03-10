@@ -2,7 +2,7 @@ use bytes::Bytes;
 use tracing::info;
 
 use crate::{
-    handlers::context::AppState,
+    handlers::packet::Packet,
     player::PlayerStatus,
     proto::{
         buffer::{PacketReader, PacketWriter},
@@ -10,6 +10,9 @@ use crate::{
         packet_type::PacketType,
     },
 };
+
+// Re-export AppState for use by other modules (e.g. leave_all_instances callers).
+use crate::handlers::context::AppState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -40,19 +43,25 @@ impl QuitType {
     }
 }
 
-pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
+pub async fn handle(mut packet: Packet) {
+    let state = &packet.state;
+    let client_id = packet.client_id();
+    let uid = packet.uid;
+    let payload = packet.payload.clone();
+
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();
     let inst_arc = match state.instances.get(iid) {
         Some(a) => a,
         None => {
-            return make_quit_response(
+            packet.reply_raw(make_quit_response(
                 uid,
                 iid,
                 QuitType::UnknownError,
                 Some("Instance not found."),
-            )
+            ));
+            return;
         }
     };
 
@@ -61,12 +70,12 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         match inst.get_players().iter().find(|p| p.client_id == client_id) {
             Some(p) => p.id,
             None => {
-                return make_quit_response(
+                return packet.reply_raw(make_quit_response(
                     uid,
                     iid,
                     QuitType::UnknownError,
                     Some("You are not in the instance."),
-                )
+                ))
             }
         }
     };
@@ -158,7 +167,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
 
     // If instance is empty now, we could leave it – for now we keep it.
 
-    make_quit_response(uid, iid, quit_type, reason.as_deref())
+    packet.reply_raw(make_quit_response(uid, iid, quit_type, reason.as_deref()));
 }
 
 fn build_leave(

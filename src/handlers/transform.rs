@@ -14,7 +14,7 @@ use bytes::Bytes;
 use tracing::debug;
 
 use crate::{
-    handlers::context::AppState,
+    handlers::{context::AppState, packet::Packet},
     player::rig::{Transform, TransformFlags},
     proto::{
         buffer::{PacketReader, PacketWriter},
@@ -29,7 +29,11 @@ enum TransformType {
     EntityPart = 1,
 }
 
-pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) {
+pub async fn handle(packet: Packet) {
+    let state = &packet.state;
+    let client_id = packet.client_id();
+    let uid = packet.uid;
+    let payload = packet.payload.clone();
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();

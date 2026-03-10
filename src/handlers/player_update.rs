@@ -10,7 +10,7 @@ use bytes::Bytes;
 use tracing::debug;
 
 use crate::{
-    handlers::context::AppState,
+    handlers::{context::AppState, packet::Packet},
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
@@ -35,7 +35,12 @@ enum PlayerUpdateResult {
     Change = 2,
 }
 
-pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
+pub async fn handle(mut packet: Packet) {
+    let state = packet.state.clone();
+    let client_id = packet.client_id();
+    let uid = packet.uid;
+    let payload = packet.payload.clone();
+
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();
@@ -43,7 +48,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
 
     let inst_arc = match state.instances.get(iid) {
         Some(a) => a,
-        None => return make_failure(uid, iid, "Instance not found."),
+        None => return packet.reply_raw(make_failure(uid, iid, "Instance not found.")),
     };
 
     // Find the requested player (may or may not be the calling client).
@@ -52,14 +57,14 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         inst.get_player(pid).is_some()
     };
     if !_player_exists {
-        return make_failure(uid, iid, "Player not found.");
+        return packet.reply_raw(make_failure(uid, iid, "Player not found."));
     }
 
     let req_flags = PlayerUpdateFlags::from_bits_truncate(r.read_u8());
 
     // If none → echo All back to requester only.
     if req_flags.is_empty() {
-        let _pkt = build_update(&inst_arc, iid, pid, PlayerUpdateFlags::ALL, state);
+        let _pkt = build_update(&inst_arc, iid, pid, PlayerUpdateFlags::ALL, &state);
         // Send to the requesting client with the request uid.
         let _w = PacketWriter::new();
         // re-build with uid
@@ -77,7 +82,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
             disp.as_deref(),
             pflags,
         );
-        return encoded;
+        return packet.reply_raw(encoded);
     }
 
     let mut result_flags = PlayerUpdateFlags::NONE;
@@ -94,7 +99,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
     }
 
     if result_flags.is_empty() {
-        return make_failure(uid, iid, "No valid update flags.");
+        return packet.reply_raw(make_failure(uid, iid, "No valid update flags."));
     }
 
     debug!(
@@ -133,7 +138,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         }
     }
 
-    build_update_packet(
+    packet.reply_raw(build_update_packet(
         uid,
         iid,
         PlayerUpdateResult::Change,
@@ -141,7 +146,7 @@ pub async fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) 
         result_flags,
         disp.as_deref(),
         pflags,
-    )
+    ));
 }
 
 fn build_update(

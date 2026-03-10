@@ -8,6 +8,7 @@ pub mod enter;
 pub mod event;
 pub mod handshake;
 pub mod latency;
+pub mod packet;
 pub mod player_update;
 pub mod properties;
 pub mod quit;

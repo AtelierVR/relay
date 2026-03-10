@@ -7,7 +7,7 @@ use parking_lot::Mutex;
 use crate::{
     client::{client::new_client, ClientManager},
     config::Config,
-    constants::DEFAULT_USE_ADDRESS,
+    constants::DEFAULT_NODE_ADDRESS,
     handlers::context::AppState,
     instance::InstanceManager,
     master::MasterClient,
@@ -21,7 +21,7 @@ pub fn make_state() -> AppState {
     let config = Arc::new(Config {
         port: 23032,
         node_gateway: String::new(),
-        use_address: DEFAULT_USE_ADDRESS.to_owned(),
+        node_address: DEFAULT_NODE_ADDRESS.to_owned(),
         token: String::new(),
         max_instances: 3,
         connection_timeout: 15,
