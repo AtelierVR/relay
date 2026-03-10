@@ -16,7 +16,7 @@ use tracing::{debug, info, warn};
 
 use crate::{
     client::{client::AuthState, user::User},
-    handlers::{context::AppState, packet::Packet},
+    handlers::packet::Packet,
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
@@ -72,19 +72,20 @@ pub async fn handle(mut packet: Packet) {
 
     let action = r.read_u8();
 
-    let response = if action == AuthAction::RequestChallenge as u8 {
-        on_request_challenge(&state, client_id, uid)
+    if action == AuthAction::RequestChallenge as u8 {
+        on_request_challenge(&mut packet);
     } else if action == AuthAction::ResolveChallenge as u8 {
-        on_resolve_challenge(&state, client_id, uid, r).await
+        on_resolve_challenge(&mut packet, r).await;
     } else {
-        make_response(uid, AuthResult::Unknown, Some("Invalid action."), None)
-    };
-    packet.reply_raw(response);
+        packet.reply_raw(make_response(uid, AuthResult::Unknown, Some("Invalid action."), None));
+    }
 }
 
-fn on_request_challenge(state: &AppState, client_id: u16, uid: u16) -> Bytes {
+fn on_request_challenge(packet: &mut Packet) {
+    let client_id = packet.client_id();
+    let uid = packet.uid;
     let challenge = random_bytes(16);
-    if let Some(arc) = state.clients.get(client_id) {
+    if let Some(arc) = packet.state.clients.get(client_id) {
         let mut c = arc.write();
         c.challenge = challenge.clone();
         c.auth_state = AuthState::ChallengeIssued;
@@ -95,50 +96,32 @@ fn on_request_challenge(state: &AppState, client_id: u16, uid: u16) -> Bytes {
     w.write_u8(AuthResult::Challenge as u8);
     w.write_u8(challenge.len() as u8);
     w.write_bytes(&challenge);
-    encode_stream_packet(uid, PacketType::Authentication, w.finish().as_ref())
+    packet.reply_raw(encode_stream_packet(uid, PacketType::Authentication, w.finish().as_ref()));
 }
 
-async fn on_resolve_challenge(
-    state: &AppState,
-    client_id: u16,
-    uid: u16,
-    mut r: PacketReader,
-) -> Bytes {
+async fn on_resolve_challenge(packet: &mut Packet, mut r: PacketReader) {
+    let client_id = packet.client_id();
+    let uid = packet.uid;
     // Read challenge stored in client.
     let challenge = {
-        match state.clients.get(client_id) {
+        match packet.state.clients.get(client_id) {
             Some(arc) => arc.read().challenge.clone(),
-            None => return Bytes::new(),
+            None => return,
         }
     };
 
     if challenge.is_empty() {
-        return make_response(
-            uid,
-            AuthResult::Unknown,
-            Some("No challenge requested."),
-            None,
-        );
+        return packet.reply_raw(make_response(uid, AuthResult::Unknown, Some("No challenge requested."), None));
     }
 
     let public_key = r.read_bytes_prefixed();
     if public_key.is_empty() {
-        return make_response(
-            uid,
-            AuthResult::Unknown,
-            Some("No public key provided."),
-            None,
-        );
+        return packet.reply_raw(make_response(uid, AuthResult::Unknown, Some("No public key provided."), None));
     }
 
     let signature = r.read_bytes_prefixed();
     if signature.is_empty() {
-        return make_response(
-            uid,
-            AuthResult::Unknown,
-            Some("No signature provided."),
-            None,
-        );
+        return packet.reply_raw(make_response(uid, AuthResult::Unknown, Some("No signature provided."), None));
     }
 
     debug!(
@@ -174,14 +157,14 @@ async fn on_resolve_challenge(
             client_id,
             hex_fmt::to_hex_str(&public_key[..public_key.len().min(64)], 64)
         );
-        return make_response(uid, AuthResult::Signature, Some("Invalid signature."), None);
+        return packet.reply_raw(make_response(uid, AuthResult::Signature, Some("Invalid signature."), None));
     }
 
     let user_id = r.read_u32();
     let server = r.read_string().unwrap_or_default();
     let fingerprint = sha256_fingerprint(&public_key);
 
-    let resolve = match state
+    let resolve = match packet.state
         .master
         .resolve_user(user_id, server.clone(), fingerprint)
         .await
@@ -189,12 +172,7 @@ async fn on_resolve_challenge(
         Ok(r) => r,
         Err(e) => {
             warn!("[Auth] client {client_id}: master error: {e}");
-            return make_response(
-                uid,
-                AuthResult::MasterError,
-                Some("Failed to contact master server."),
-                None,
-            );
+            return packet.reply_raw(make_response(uid, AuthResult::MasterError, Some("Failed to contact master server."), None));
         }
     };
 
@@ -206,7 +184,7 @@ async fn on_resolve_challenge(
                     display_name: info.display,
                     address: info.server,
                 };
-                if let Some(arc) = state.clients.get(client_id) {
+                if let Some(arc) = packet.state.clients.get(client_id) {
                     let mut c = arc.write();
                     c.user = Some(user.clone());
                     c.auth_state = AuthState::Authenticated;
@@ -220,35 +198,30 @@ async fn on_resolve_challenge(
                 w.write_u32(user.id);
                 w.write_string(&user.address);
                 w.write_string(&user.display_name);
-                return encode_stream_packet(uid, PacketType::Authentication, w.finish().as_ref());
+                return packet.reply_raw(encode_stream_packet(uid, PacketType::Authentication, w.finish().as_ref()));
             }
-            make_response(
-                uid,
-                AuthResult::Unknown,
-                Some("No user data in response."),
-                None,
-            )
+            packet.reply_raw(make_response(uid, AuthResult::Unknown, Some("No user data in response."), None));
         }
         "blacklisted" => {
-            if let Some(arc) = state.clients.get(client_id) {
+            if let Some(arc) = packet.state.clients.get(client_id) {
                 arc.write().user = None;
             }
             let mut w = PacketWriter::new();
             w.write_u8(AuthResult::Blacklisted as u8);
             w.write_i64(resolve.expire_at);
             w.write_string(resolve.reason.as_deref().unwrap_or("Blacklisted"));
-            encode_stream_packet(uid, PacketType::Authentication, w.finish().as_ref())
+            packet.reply_raw(encode_stream_packet(uid, PacketType::Authentication, w.finish().as_ref()));
         }
         _ => {
-            if let Some(arc) = state.clients.get(client_id) {
+            if let Some(arc) = packet.state.clients.get(client_id) {
                 arc.write().user = None;
             }
-            make_response(
+            packet.reply_raw(make_response(
                 uid,
                 AuthResult::Invalid,
                 resolve.reason.as_deref().or(Some("Invalid user.")),
                 None,
-            )
+            ));
         }
     }
 }

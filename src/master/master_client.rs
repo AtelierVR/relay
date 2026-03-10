@@ -688,7 +688,7 @@ impl MasterClient {
                         let c = arc.read();
                         clients.push(ClientInfo {
                             i: c.id.to_string(),
-                            a: "unknown".to_string(), // TODO: get actual address
+                            a: c.address.clone(),
                             p: c.platform.clone(),
                             e: c.engine.clone(),
                             u: c.user.as_ref().map(|u| u.to_identifier()),

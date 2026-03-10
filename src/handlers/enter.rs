@@ -18,6 +18,7 @@ use tracing::{debug, info};
 use crate::{
     handlers::{context::AppState, packet::Packet},
     instance::InstanceFlags,
+    master::messages::EventPlayerJoin,
     player::{Player, PlayerFlags, PlayerStatus},
     proto::{
         buffer::{PacketReader, PacketWriter},
@@ -174,6 +175,26 @@ pub async fn handle(mut packet: Packet) {
         player_id, client_id, iid, user_info
     );
 
+    // Notify node of player joining.
+    {
+        let (user_id_opt, display_name) = if let Some(arc) = state.clients.get(client_id) {
+            let c = arc.read();
+            let uid = c.user.as_ref().map(|u| u.to_identifier());
+            let disp = c.user.as_ref().map(|u| u.display_name.clone())
+                .unwrap_or_else(|| format!("Player {}", player_id));
+            (uid, disp)
+        } else {
+            (None, format!("Player {}", player_id))
+        };
+        let _ = state.master.emit("player_join", EventPlayerJoin {
+            client_id: client_id.to_string(),
+            player_id: player_id.to_string(),
+            instance_id: iid.to_string(),
+            user: user_id_opt,
+            display: display_name,
+        });
+    }
+
     // Promote master if none exists yet.
     {
         let mut inst = inst_arc.write();
@@ -185,34 +206,28 @@ pub async fn handle(mut packet: Packet) {
         }
     }
 
-    // --- Send Enter response to the entering client. ---
-    let enter_response = build_enter_response(&state, client_id, inst_arc.clone(), player_id, uid);
-
-    // Push the response via the client's tx (the bidi task will return it).
-    // Actually, for the bidi stream path, we return the response Bytes directly.
-    // For in-instance broadcasts we use push channel.
-
     // --- Broadcast Join to all other clients in the instance. ---
     broadcast_join(&state, client_id, player_id, &inst_arc);
 
-    packet.reply_raw(enter_response);
+    // --- Send Enter response to the entering client. ---
+    build_enter_response(&mut packet, inst_arc.clone(), player_id);
 }
 
 fn build_enter_response(
-    state: &AppState,
-    client_id: u16,
+    packet: &mut Packet,
     inst_arc: std::sync::Arc<parking_lot::RwLock<crate::instance::Instance>>,
     player_id: u16,
-    uid: u16,
-) -> Bytes {
+) {
+    let client_id = packet.client_id();
+    let uid = packet.uid;
     let inst = inst_arc.read();
     let player = match inst.get_player(player_id) {
         Some(p) => p,
-        None => return Bytes::new(),
+        None => return,
     };
-    let client = match state.clients.get(client_id) {
+    let client = match packet.state.clients.get(client_id) {
         Some(a) => a,
-        None => return Bytes::new(),
+        None => return,
     };
     let c = client.read();
     let (user_id, user_addr, display) = if let Some(u) = &c.user {
@@ -238,12 +253,12 @@ fn build_enter_response(
     let tps = if player.custom_tps != 0 {
         player.custom_tps
     } else {
-        inst.get_effective_tps(&state.config.load_balancing)
+        inst.get_effective_tps(&packet.state.config.load_balancing)
     };
     let threshold = if player.custom_threshold != 0.0 {
         player.custom_threshold
     } else {
-        inst.get_effective_threshold(&state.config.load_balancing)
+        inst.get_effective_threshold(&packet.state.config.load_balancing)
     };
 
     let mut w = PacketWriter::new();
@@ -258,7 +273,7 @@ fn build_enter_response(
     w.write_u8(tps);
     w.write_f32(threshold);
     w.write_f32(inst.render_entity);
-    encode_stream_packet(uid, PacketType::Enter, w.finish().as_ref())
+    packet.reply_raw(encode_stream_packet(uid, PacketType::Enter, w.finish().as_ref()));
 }
 
 /// Send a Join broadcast to all other players already in the instance.

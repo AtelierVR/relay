@@ -5,7 +5,8 @@
 /// Broadcast to others: [iid: u8][AvatarChangedResult::Changing][player_id: u16]
 ///                      [avatar_id: u32][server: string][version: u16]
 use bytes::Bytes;
-use tracing::debug;
+use tracing::{debug, warn};
+use tracing_subscriber::field::debug;
 
 use crate::{
     avatar::Avatar,
@@ -14,7 +15,7 @@ use crate::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
         packet_type::PacketType,
-    },
+    }, utils::hex_fmt,
 };
 
 #[repr(u8)]
@@ -30,12 +31,18 @@ pub async fn handle(mut packet: Packet) {
     let uid = packet.uid;
     let payload = packet.payload.clone();
 
+    debug!(
+        "[AvatarChanged] client {}: raw payload: {}",
+        client_id,
+        hex_fmt::fmt_bytes(payload.as_ref(), 32)
+    );
+
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();
     let inst_arc = match state.instances.get(iid) {
         Some(a) => a,
-        None => return packet.reply_raw(make_error(uid, iid, "Invalid instance")),
+        None => return make_error(&mut packet, uid, iid, "Invalid instance"),
     };
 
     // Self player must be ready.
@@ -43,7 +50,7 @@ pub async fn handle(mut packet: Packet) {
         let inst = inst_arc.read();
         match inst.get_players().iter().find(|p| p.client_id == client_id) {
             Some(p) if p.is_ready() => p.id,
-            _ => return packet.reply_raw(make_error(uid, iid, "You are not a valid player")),
+            _ => return make_error(&mut packet, uid, iid, "You are not a valid player"),
         }
     };
 
@@ -55,7 +62,7 @@ pub async fn handle(mut packet: Packet) {
         let inst = inst_arc.read();
         let op = match inst.get_players().iter().find(|p| p.id == pid) {
             Some(p) if p.is_ready() => p,
-            _ => return packet.reply_raw(make_error(uid, iid, "Player not found")),
+            _ => return make_error(&mut packet, uid, iid, "Player not found"),
         };
 
         let self_p = inst
@@ -65,11 +72,12 @@ pub async fn handle(mut packet: Packet) {
             .unwrap();
         // A player is "allowed" to operate on another if they have privilege (matches C# IsAllowed).
         if !self_p.has_privilege() {
-            return packet.reply_raw(make_error(
+            return make_error(
+                &mut packet,
                 uid,
                 iid,
                 "You are not allowed to change this player's avatar",
-            ));
+            );
         }
         op.id
     } else {
@@ -132,10 +140,16 @@ fn build_broadcast(iid: u8, player_id: u16, avatar: &Avatar) -> Bytes {
     encode_stream_packet(0, PacketType::AvatarChanged, w.finish().as_ref())
 }
 
-fn make_error(uid: u16, iid: u8, reason: &str) -> Bytes {
+fn make_error(packet: &mut Packet, uid: u16, iid: u8, reason: &str) {
+    warn!(
+        "[AvatarChanged] client {} in instance {}: failed to change avatar: {}",
+        packet.client_id(),
+        iid,
+        reason
+    );
     let mut w = PacketWriter::new();
     w.write_u8(iid);
     w.write_u8(AvatarChangedResult::Failed as u8);
     w.write_string(reason);
-    encode_stream_packet(uid, PacketType::AvatarChanged, w.finish().as_ref())
+    packet.reply_raw(encode_stream_packet(uid, PacketType::AvatarChanged, w.finish().as_ref()));
 }

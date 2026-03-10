@@ -13,7 +13,7 @@ use tracing::debug;
 
 use crate::{
     constants::SAFE_LOCAL_ADDRESS,
-    handlers::{context::AppState, packet::Packet},
+    handlers::packet::Packet,
     player::PlayerStatus,
     proto::{
         buffer::{PacketReader, PacketWriter},
@@ -92,20 +92,14 @@ pub async fn handle(mut packet: Packet) {
     };
 
     match action {
-        TravelingAction::Travel => packet.reply_raw(do_travel(&state, uid, iid, self_player_id, &inst_arc)),
-        TravelingAction::Ready => packet.reply_raw(do_ready(&state, uid, iid, self_player_id, &inst_arc)),
+        TravelingAction::Travel => do_travel(&mut packet, iid, self_player_id, &inst_arc),
+        TravelingAction::Ready => do_ready(&mut packet, iid, self_player_id, &inst_arc),
         TravelingAction::Failed => {}
     }
 }
 
-fn do_travel(
-    state: &AppState,
-    uid: u16,
-    iid: u8,
-    player_id: u16,
-    inst_arc: &crate::instance::ArcInstance,
-) -> Bytes {
-    // Player must not be None.
+fn do_travel(packet: &mut Packet, iid: u8, player_id: u16, inst_arc: &crate::instance::ArcInstance) {
+    let uid = packet.uid;
     let status = {
         let inst = inst_arc.read();
         inst.get_player(player_id)
@@ -113,34 +107,23 @@ fn do_travel(
             .unwrap_or(PlayerStatus::None)
     };
     if status == PlayerStatus::None {
-        return make_response(
-            uid,
-            iid,
-            TravelingResults::Unknown,
-            Some("Player is not ready to travel."),
-        );
+        return packet.reply_raw(make_response(uid, iid, TravelingResults::Unknown, Some("Player is not ready to travel.")));
     }
 
     let (master_id, address, version) = {
         let inst = inst_arc.read();
         let w = &inst.world;
         if w.master_id == 0 && w.address.is_empty() {
-            return make_response(
-                uid,
-                iid,
-                TravelingResults::Unknown,
-                Some("World is not set for the instance."),
-            );
+            return packet.reply_raw(make_response(uid, iid, TravelingResults::Unknown, Some("World is not set for the instance.")));
         }
         let address = if w.address == SAFE_LOCAL_ADDRESS {
-            state.config.node_address.clone()
+            packet.state.config.node_address.clone()
         } else {
             w.address.clone()
         };
         (w.master_id, address, w.version)
     };
 
-    // Update player status to Traveling.
     {
         let mut inst = inst_arc.write();
         if let Some(p) = inst.get_player_mut(player_id) {
@@ -148,10 +131,7 @@ fn do_travel(
         }
     }
 
-    debug!(
-        "[Traveling] player {} traveling in instance {}",
-        player_id, iid
-    );
+    debug!("[Traveling] player {} traveling in instance {}", player_id, iid);
 
     let mut w = PacketWriter::new();
     w.write_u8(iid);
@@ -159,16 +139,11 @@ fn do_travel(
     w.write_u32(master_id);
     w.write_string(&address);
     w.write_u16(version);
-    encode_stream_packet(uid, PacketType::Traveling, w.finish().as_ref())
+    packet.reply_raw(encode_stream_packet(uid, PacketType::Traveling, w.finish().as_ref()));
 }
 
-fn do_ready(
-    _state: &AppState,
-    uid: u16,
-    iid: u8,
-    player_id: u16,
-    inst_arc: &crate::instance::ArcInstance,
-) -> Bytes {
+fn do_ready(packet: &mut Packet, iid: u8, player_id: u16, inst_arc: &crate::instance::ArcInstance) {
+    let uid = packet.uid;
     let status = {
         let inst = inst_arc.read();
         inst.get_player(player_id)
@@ -177,12 +152,7 @@ fn do_ready(
     };
 
     if status != PlayerStatus::Traveling {
-        return make_response(
-            uid,
-            iid,
-            TravelingResults::Unknown,
-            Some("Player is not traveling."),
-        );
+        return packet.reply_raw(make_response(uid, iid, TravelingResults::Unknown, Some("Player is not traveling.")));
     }
 
     {
@@ -192,12 +162,9 @@ fn do_ready(
         }
     }
 
-    debug!(
-        "[Traveling] player {} is now Ready in instance {}",
-        player_id, iid
-    );
+    debug!("[Traveling] player {} is now Ready in instance {}", player_id, iid);
 
-    make_response(uid, iid, TravelingResults::Ready, None)
+    packet.reply_raw(make_response(uid, iid, TravelingResults::Ready, None));
 }
 
 fn make_response(uid: u16, iid: u8, result: TravelingResults, reason: Option<&str>) -> Bytes {

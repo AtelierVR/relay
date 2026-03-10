@@ -40,6 +40,8 @@ pub enum AuthState {
 pub struct Client {
     /// Relay-assigned numeric client ID.
     pub id: u16,
+    /// Remote IP:port address of the client (e.g. `"1.2.3.4:5678"`).
+    pub address: String,
     /// Client platform string (e.g. `"PC"`, `"Quest"`).
     pub platform: String,
     /// Client engine string (e.g. `"Unity"`, `"Unreal"`).
@@ -62,6 +64,7 @@ impl Client {
     pub fn new(id: u16, tx: mpsc::Sender<Bytes>, conn: Arc<Connection>) -> Self {
         Self {
             id,
+            address: String::new(),
             platform: String::new(),
             engine: String::new(),
             last_seen: Instant::now(),

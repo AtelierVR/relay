@@ -67,7 +67,11 @@ async fn main() -> Result<()> {
     );
 
     // ── TLS + QUIC endpoint ───────────────────────────────────────────────
-    let server_cfg = make_server_config(&[&config.node_address])?;
+    let server_cfg = make_server_config(
+        &[&config.node_address],
+        config.connection_timeout,
+        config.keep_alive_interval,
+    )?;
 
     let addr: SocketAddr = format!("0.0.0.0:{}", config.port).parse()?;
     let endpoint = Endpoint::server(server_cfg, addr)?;

@@ -14,7 +14,7 @@ use bytes::Bytes;
 use tracing::debug;
 
 use crate::{
-    handlers::{context::AppState, packet::Packet},
+    handlers::packet::Packet,
     player::rig::{Transform, TransformFlags},
     proto::{
         buffer::{PacketReader, PacketWriter},
@@ -32,7 +32,6 @@ enum TransformType {
 pub async fn handle(packet: Packet) {
     let state = &packet.state;
     let client_id = packet.client_id();
-    let uid = packet.uid;
     let payload = packet.payload.clone();
     let mut r = PacketReader::new(payload);
 
@@ -51,20 +50,20 @@ pub async fn handle(packet: Packet) {
     let sub_type = r.read_u8();
 
     match sub_type {
-        1 => on_entity_part(state, client_id, uid, iid, inst_arc, r),
-        0 => on_by_path(state, client_id, uid, iid, inst_arc, r),
+        1 => on_entity_part(&packet, iid, inst_arc, r),
+        0 => on_by_path(&packet, iid, inst_arc, r),
         _ => debug!("[Transform] unknown sub-type {}", sub_type),
     }
 }
 
 fn on_entity_part(
-    state: &AppState,
-    client_id: u16,
-    _uid: u16,
+    packet: &Packet,
     iid: u8,
     inst_arc: crate::instance::ArcInstance,
     mut r: PacketReader,
 ) {
+    let state = &packet.state;
+    let client_id = packet.client_id();
     // Self player must be ready.
     let self_player_id = {
         let inst = inst_arc.read();
@@ -165,13 +164,13 @@ fn on_entity_part(
 }
 
 fn on_by_path(
-    state: &AppState,
-    client_id: u16,
-    _uid: u16,
+    packet: &Packet,
     iid: u8,
     inst_arc: crate::instance::ArcInstance,
     mut r: PacketReader,
 ) {
+    let state = &packet.state;
+    let client_id = packet.client_id();
     let self_player_id = {
         let inst = inst_arc.read();
         match inst.get_players().iter().find(|p| p.client_id == client_id) {
@@ -283,10 +282,10 @@ fn write_transform_fields(w: &mut PacketWriter, flags: TransformFlags, tr: &Tran
     }
 }
 
-fn send_datagram_broadcast(state: &AppState, recipients: &[u16], packet: Bytes) {
+fn send_datagram_broadcast(state: &crate::handlers::context::AppState, recipients: &[u16], packet: Bytes) {
     for cid in recipients {
         if let Some(arc) = state.clients.get(*cid) {
-            let _ = arc.read().try_push(packet.clone());
+            arc.read().send_datagram(packet.clone());
         }
     }
 }

@@ -3,6 +3,7 @@ use tracing::info;
 
 use crate::{
     handlers::packet::Packet,
+    master::messages::EventPlayerLeave,
     player::PlayerStatus,
     proto::{
         buffer::{PacketReader, PacketWriter},
@@ -165,7 +166,15 @@ pub async fn handle(mut packet: Packet) {
         inst.remove_player(self_player_id);
     }
 
-    // If instance is empty now, we could leave it – for now we keep it.
+    // Notify node of player leaving.
+    let user_id_opt = state.clients.get(client_id)
+        .and_then(|arc| arc.read().user.as_ref().map(|u| u.to_identifier()));
+    let _ = state.master.emit("player_leave", EventPlayerLeave {
+        client_id: client_id.to_string(),
+        player_id: self_player_id.to_string(),
+        instance_id: iid.to_string(),
+        user: user_id_opt,
+    });
 
     packet.reply_raw(make_quit_response(uid, iid, quit_type, reason.as_deref()));
 }
@@ -226,6 +235,16 @@ pub fn leave_all_instances(state: &AppState, client_id: u16) {
         }
 
         inst_arc.write().remove_player(player_id);
+
+        // Notify node of player leaving (leave_all path, e.g. on disconnect).
+        let user_id_opt = state.clients.get(client_id)
+            .and_then(|arc| arc.read().user.as_ref().map(|u| u.to_identifier()));
+        let _ = state.master.emit("player_leave", EventPlayerLeave {
+            client_id: client_id.to_string(),
+            player_id: player_id.to_string(),
+            instance_id: iid.to_string(),
+            user: user_id_opt,
+        });
     }
 }
 

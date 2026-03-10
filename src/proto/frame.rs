@@ -10,7 +10,7 @@ use anyhow::{anyhow, Result};
 use bytes::{BufMut, Bytes, BytesMut};
 use quinn::{RecvStream, SendStream};
 
-use super::header::{decode_datagram_header, PacketHeader};
+use super::header::{decode_stream_header, PacketHeader};
 
 /// Read one packet from a QUIC `RecvStream`.
 ///
@@ -65,7 +65,7 @@ pub async fn write_framed(stream: &mut SendStream, data: &Bytes) -> Result<()> {
 
 /// Parse a QUIC datagram buffer into `(PacketHeader, payload)`.
 ///
-/// Datagrams carry no length prefix — the QUIC layer provides the boundary.
+/// Wire format: [Length: u16 BE][UID: u16 BE][Type: u8][payload] — same as stream.
 pub fn parse_datagram(buf: Bytes) -> Result<(PacketHeader, Bytes)> {
-    decode_datagram_header(buf).map_err(|e| anyhow!("datagram header: {e}"))
+    decode_stream_header(buf).map_err(|e| anyhow!("datagram header: {e}"))
 }

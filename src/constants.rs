@@ -14,7 +14,7 @@ pub const SAFE_LOCAL_ADDRESS: &str = "::";
 // Packet sizing.
 pub const MAX_PACKET_SIZE: usize = 1029; // 1024 payload + 5 header bytes
 pub const STREAM_HEADER_SIZE: usize = 5; // [Length: u16][UID: u16][Type: u8]
-pub const DGRAM_HEADER_SIZE: usize = 3; // [UID: u16][Type: u8] (length implicit)
+pub const DGRAM_HEADER_SIZE: usize = 5;  // [Length: u16][UID: u16][Type: u8] — same as stream
 
 // Session timeouts (seconds).
 pub const DEFAULT_CONNECTION_TIMEOUT: u16 = 15;

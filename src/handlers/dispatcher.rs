@@ -19,6 +19,7 @@ const SILENT_PACKETS: &[PacketType] = &[
     PacketType::Latency,
     PacketType::Transform,
     PacketType::Properties,
+    PacketType::Event
 ];
 
 /// Dispatch any incoming packet — stream or datagram — to the matching handler.

@@ -148,6 +148,49 @@ pub struct RelayConnected {
     pub master_address: String,
 }
 
+// ─── relay events ───────────────────────────────────────────────────────────
+
+/// Emitted to the node when a QUIC client connects to the relay.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventClientConnected {
+    /// Relay-assigned client ID.
+    pub id: String,
+    /// Remote IP:port.
+    pub address: String,
+}
+
+/// Emitted to the node when a QUIC client disconnects.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventClientDisconnected {
+    /// Relay-assigned client ID.
+    pub id: String,
+    /// Remote IP:port.
+    pub address: String,
+    /// User identifier at time of disconnect, if authenticated.
+    pub user: Option<String>,
+}
+
+/// Emitted to the node when a player joins an instance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventPlayerJoin {
+    pub client_id: String,
+    pub player_id: String,
+    pub instance_id: String,
+    /// User identifier, if authenticated.
+    pub user: Option<String>,
+    pub display: String,
+}
+
+/// Emitted to the node when a player leaves an instance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventPlayerLeave {
+    pub client_id: String,
+    pub player_id: String,
+    pub instance_id: String,
+    /// User identifier, if known.
+    pub user: Option<String>,
+}
+
 // ─── drop_instance ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -10,7 +10,7 @@ use bytes::Bytes;
 use tracing::debug;
 
 use crate::{
-    handlers::{context::AppState, packet::Packet},
+    handlers::packet::Packet,
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
@@ -64,10 +64,7 @@ pub async fn handle(mut packet: Packet) {
 
     // If none → echo All back to requester only.
     if req_flags.is_empty() {
-        let _pkt = build_update(&inst_arc, iid, pid, PlayerUpdateFlags::ALL, &state);
-        // Send to the requesting client with the request uid.
-        let _w = PacketWriter::new();
-        // re-build with uid
+        // Echo all fields back to the requester with their uid.
         let (disp, pflags) = {
             let inst = inst_arc.read();
             let p = inst.get_player(pid).unwrap();
@@ -147,29 +144,6 @@ pub async fn handle(mut packet: Packet) {
         disp.as_deref(),
         pflags,
     ));
-}
-
-fn build_update(
-    inst_arc: &crate::instance::ArcInstance,
-    iid: u8,
-    pid: u16,
-    flags: PlayerUpdateFlags,
-    _state: &AppState,
-) -> Bytes {
-    let (disp, pflags) = {
-        let inst = inst_arc.read();
-        let p = inst.get_player(pid).unwrap();
-        (p.display.clone(), p.flags.bits())
-    };
-    build_update_packet(
-        0,
-        iid,
-        PlayerUpdateResult::Change,
-        pid,
-        flags,
-        disp.as_deref(),
-        pflags,
-    )
 }
 
 fn build_update_packet(

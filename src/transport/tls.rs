@@ -1,13 +1,17 @@
 use anyhow::Result;
 use rcgen::{CertificateParams, DistinguishedName, SanType};
 use rustls::ServerConfig;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 /// Build a `quinn::ServerConfig` backed by an ephemeral self-signed certificate.
 ///
 /// The certificate is valid for `localhost` plus the optional `san_addresses` list
 /// (e.g. the relay's advertised public IP string).
-pub fn make_server_config(san_addresses: &[&str]) -> Result<quinn::ServerConfig> {
+pub fn make_server_config(
+    san_addresses: &[&str],
+    connection_timeout_secs: u16,
+    keep_alive_interval_secs: u16,
+) -> Result<quinn::ServerConfig> {
     let mut params = CertificateParams::default();
     params.distinguished_name = DistinguishedName::new();
     params.subject_alt_names = vec![SanType::DnsName("localhost".try_into()?)];
@@ -41,9 +45,16 @@ pub fn make_server_config(san_addresses: &[&str]) -> Result<quinn::ServerConfig>
 
     // Enable QUIC datagrams for broadcasts
     let mut transport = quinn::TransportConfig::default();
-    transport.datagram_receive_buffer_size(Some(65536));  // 64KB buffer for datagrams
+    transport.datagram_receive_buffer_size(Some(65536));
     transport.datagram_send_buffer_size(65536);
-    
+
+    // Wire config timeouts into QUIC so dead clients are detected.
+    let idle_timeout = Duration::from_secs(connection_timeout_secs as u64)
+        .try_into()
+        .expect("connection_timeout too large for QUIC VarInt");
+    transport.max_idle_timeout(Some(idle_timeout));
+    transport.keep_alive_interval(Some(Duration::from_secs(keep_alive_interval_secs as u64)));
+
     let mut server_config = quinn::ServerConfig::with_crypto(Arc::new(quic_server_config));
     server_config.transport_config(Arc::new(transport));
 
