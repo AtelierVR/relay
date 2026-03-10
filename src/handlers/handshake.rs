@@ -21,11 +21,6 @@ enum HandshakeFlags {
 }
 
 pub fn handle(state: &AppState, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
-    debug!(
-        "[Handshake] client {}: raw payload: {}",
-        client_id,
-        hex_fmt::fmt_bytes(payload.as_ref(), 32)
-    );
     let mut r = PacketReader::new(payload);
     let protocol = r.read_u16();
 
