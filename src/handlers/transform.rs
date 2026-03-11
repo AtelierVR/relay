@@ -149,7 +149,7 @@ fn on_entity_part(
         let inst = inst_arc.read();
         inst.get_players()
             .iter()
-            .filter(|p| p.client_id != client_id && inst.can_user_see_user(p.id, op_player_id))
+            .filter(|p| p.client_id != client_id)
             .map(|p| p.client_id)
             .collect()
     };
