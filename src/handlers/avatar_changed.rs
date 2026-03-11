@@ -31,12 +31,6 @@ pub async fn handle(mut packet: Packet) {
     let uid = packet.uid;
     let payload = packet.payload.clone();
 
-    debug!(
-        "[AvatarChanged] client {}: raw payload: {}",
-        client_id,
-        hex_fmt::fmt_bytes(payload.as_ref(), 32)
-    );
-
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();
@@ -93,8 +87,8 @@ pub async fn handle(mut packet: Packet) {
     };
 
     debug!(
-        "[AvatarChanged] player {} (by client {}) in instance {}: avatar={}",
-        op_player_id, client_id, iid, avatar.id
+        "[AvatarChanged] player {} (by client {}) in instance {}: avatar={}@{} (version {})",
+        op_player_id, client_id, iid, avatar.id, avatar.server, avatar.version
     );
 
     // Apply avatar.
