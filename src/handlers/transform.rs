@@ -24,7 +24,7 @@ use crate::{
 };
 
 #[repr(u8)]
-enum TransformType {
+pub enum TransformType {
     ByPath = 0,
     EntityPart = 1,
 }
@@ -118,7 +118,6 @@ fn on_entity_part(
         let inst = inst_arc.read();
         inst.get_player(op_player_id)
             .and_then(|p| p.transforms.get(rig_id))
-            .copied()
             .unwrap_or_default()
     };
 
@@ -154,11 +153,12 @@ fn on_entity_part(
     };
     send_datagram_broadcast(state, &recipients, broadcast);
 
-    // Store updated transform (strip RESET).
+    // Store updated transform (strip RESET, accumulate flags).
     {
+        let is_reset = flags.contains(TransformFlags::RESET);
         let mut inst = inst_arc.write();
         if let Some(p) = inst.get_player_mut(op_player_id) {
-            p.transforms.set(rig_id, tr);
+            p.transforms.set(rig_id, active_flags, tr, is_reset);
         }
     }
 }

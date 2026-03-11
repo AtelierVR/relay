@@ -16,10 +16,10 @@ use bytes::Bytes;
 use tracing::{debug, info};
 
 use crate::{
-    handlers::{context::AppState, packet::Packet},
+    handlers::{context::AppState, packet::Packet, transform::TransformType},
     instance::InstanceFlags,
     master::messages::EventPlayerJoin,
-    player::{Player, PlayerFlags, PlayerStatus},
+    player::{Player, PlayerFlags, PlayerStatus, rig::{Transform, TransformFlags}},
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
@@ -362,6 +362,52 @@ fn broadcast_join(
         if let Some(joining_arc) = state.clients.get(entering_client_id) {
             let c = joining_arc.read();
             c.try_push(other_join);
+        }
+
+        // Sync avatar of existing player to the entering client.
+        let avatar_opt = {
+            let inst = inst_arc.read();
+            inst.get_player(other_pid).and_then(|p| p.avatar.clone())
+        };
+        if let Some(avatar) = avatar_opt {
+            let mut w = PacketWriter::new();
+            w.write_u8(iid);
+            w.write_u8(0u8); // AvatarChangedResult::Changing
+            w.write_u16(other_pid);
+            w.write_u32(avatar.id);
+            w.write_string(&avatar.server);
+            w.write_u16(avatar.version);
+            let pkt = encode_stream_packet(0, PacketType::AvatarChanged, w.finish().as_ref());
+            if let Some(joining_arc) = state.clients.get(entering_client_id) {
+                joining_arc.read().try_push(pkt);
+            }
+        }
+
+        // Sync all known transforms of existing player to the entering client.
+        let transforms: Vec<(u16, TransformFlags, Transform)> = {
+            let inst = inst_arc.read();
+            inst.get_player(other_pid)
+                .map(|p| p.transforms.iter().collect())
+                .unwrap_or_default()
+        };
+        for (rig_id, tr_flags, tr) in transforms {
+            if tr_flags.is_empty() { continue; }
+            let mut w = PacketWriter::new();
+            w.write_u8(iid);
+            w.write_u8(TransformType::EntityPart as u8);
+            w.write_u16(other_pid);
+            w.write_u16(rig_id);
+            w.write_u8(tr_flags.bits());
+            if tr_flags.contains(TransformFlags::POSITION) { w.write_vec3(tr.position); }
+            if tr_flags.contains(TransformFlags::ROTATION) { w.write_quat(tr.rotation); }
+            if tr_flags.contains(TransformFlags::SCALE) { w.write_vec3(tr.scale); }
+            if tr_flags.contains(TransformFlags::VELOCITY) { w.write_vec3(tr.velocity); }
+            if tr_flags.contains(TransformFlags::ANG_VELOCITY) { w.write_vec3(tr.ang_velocity); }
+            w.write_u16(other_pid); // broadcaster = player itself
+            let pkt = encode_stream_packet(0, PacketType::Transform, w.finish().as_ref());
+            if let Some(joining_arc) = state.clients.get(entering_client_id) {
+                joining_arc.read().try_push(pkt);
+            }
         }
     }
 }
