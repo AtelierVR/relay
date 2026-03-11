@@ -9,7 +9,7 @@ use tracing::{debug, warn};
 use crate::proto::packet_type::PacketType;
 
 use super::{
-    auth, avatar_changed, custom, disconnect, enter, event, handshake, latency, packet::Packet,
+    auth, avatar_changed, custom, disconnect, enter, event, handshake, latency, message, packet::Packet,
     player_update, properties, quit, reliable, server_config, sessions, teleport, transform,
     traveling, voice,
 };
@@ -57,6 +57,7 @@ pub async fn dispatch(packet: Packet) {
         PacketType::PlayerUpdate   => player_update::handle(packet).await,
         PacketType::Sessions       => sessions::handle(packet).await,
         PacketType::Event          => event::handle(packet).await,
+        PacketType::Message        => message::handle(packet).await,
 
         // ── Datagram packets ──────────────────────────────────────────────
         PacketType::Transform => transform::handle(packet).await,
