@@ -722,22 +722,29 @@ impl MasterClient {
                                 p: inst
                                     .get_players()
                                     .iter()
-                                    .map(|p| PlayerInfo {
+                                    .map(|p| {
+                                    let client_arc = self.clients.get(p.client_id);
+                                    let (display, user_id) = if let Some(arc) = client_arc {
+                                        let c = arc.read();
+                                        let disp = p.display.clone().unwrap_or_else(|| {
+                                            c.user
+                                                .as_ref()
+                                                .map(|u| u.display_name.clone())
+                                                .unwrap_or_else(|| "Unknown".to_string())
+                                        });
+                                        let uid = c.user.as_ref().map(|u| u.to_identifier());
+                                        (disp, uid)
+                                    } else {
+                                        (p.display.clone().unwrap_or_else(|| "Unknown".to_string()), None)
+                                    };
+                                    PlayerInfo {
                                         i: p.id.to_string(),
                                         c: p.client_id.to_string(),
-                                        d: p.display.clone().unwrap_or_else(|| {
-                                            self.clients
-                                                .get(p.client_id)
-                                                .and_then(|arc| {
-                                                    arc.read()
-                                                        .user
-                                                        .as_ref()
-                                                        .map(|u| u.display_name.clone())
-                                                })
-                                                .unwrap_or_else(|| "Unknown".to_string())
-                                        }),
+                                        d: display,
                                         f: p.flags.bits(),
-                                    })
+                                        u: user_id,
+                                    }
+                                })
                                     .collect(),
                                 f: inst.flags.bits(),
                                 w: format!("{}@{}", inst.world.master_id, inst.world.address),

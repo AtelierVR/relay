@@ -294,8 +294,9 @@ pub struct InstanceInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerInfo {
-    pub i: String, // player ID
-    pub c: String, // client ID
-    pub d: String, // display name
-    pub f: u32,    // flags
+    pub i: String,         // player ID
+    pub c: String,         // client ID
+    pub d: String,         // display name
+    pub f: u32,            // flags
+    pub u: Option<String>, // user identifier (e.g. "1@hactazia.fr"), None if unauthenticated
 }
