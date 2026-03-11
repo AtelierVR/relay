@@ -12,6 +12,7 @@
 ///   Broadcast: [iid][TransformType::ByPath][path][flags][...][pId]
 use bytes::Bytes;
 use tracing::debug;
+use tracing_subscriber::field::debug;
 
 use crate::{
     handlers::packet::Packet,
@@ -20,7 +21,7 @@ use crate::{
         buffer::{PacketReader, PacketWriter},
         header::encode_datagram,
         packet_type::PacketType,
-    },
+    }, utils::hex_fmt,
 };
 
 #[repr(u8)]
@@ -33,6 +34,7 @@ pub async fn handle(packet: Packet) {
     let state = &packet.state;
     let client_id = packet.client_id();
     let payload = packet.payload.clone();
+
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();
@@ -50,8 +52,8 @@ pub async fn handle(packet: Packet) {
     let sub_type = r.read_u8();
 
     match sub_type {
-        1 => on_entity_part(&packet, iid, inst_arc, r),
-        0 => on_by_path(&packet, iid, inst_arc, r),
+        x if x == TransformType::EntityPart as u8 => on_entity_part(&packet, iid, inst_arc, r),
+        x if x == TransformType::ByPath as u8 => on_by_path(&packet, iid, inst_arc, r),
         _ => debug!("[Transform] unknown sub-type {}", sub_type),
     }
 }
