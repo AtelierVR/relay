@@ -8,7 +8,7 @@
 pub enum PacketType {
     Disconnect = 0x00,
     Handshake = 0x01,
-    Segmentation = 0x02,
+    Message = 0x02,
     Reliable = 0x03,
     Latency = 0x04,
     Authentication = 0x05,
@@ -37,7 +37,7 @@ impl TryFrom<u8> for PacketType {
         match v {
             0x00 => Ok(Self::Disconnect),
             0x01 => Ok(Self::Handshake),
-            0x02 => Ok(Self::Segmentation),
+            0x02 => Ok(Self::Message),
             0x03 => Ok(Self::Reliable),
             0x04 => Ok(Self::Latency),
             0x05 => Ok(Self::Authentication),

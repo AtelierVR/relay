@@ -28,6 +28,7 @@ use crate::{
     handlers::context::AppState,
     instance::InstanceManager,
     master::MasterClient,
+    proto::{buffer::PacketWriter, header::encode_datagram, packet_type::PacketType},
     transport::{quic_server, tls::make_server_config},
 };
 
@@ -116,6 +117,14 @@ async fn main() -> Result<()> {
         });
     }
 
+    // ── TEST: spam Message(0x02) broadcast ───────────────────────────────
+    // {
+    //     let state_ref = Arc::clone(&state);
+    //     tokio::spawn(async move {
+    //         spam_message_task(state_ref).await;
+    //     });
+    // }
+
     // ── QUIC accept loop ──────────────────────────────────────────────────
     if let Err(e) = quic_server::run(state, endpoint).await {
         error!("[main] QUIC server error: {e}");
@@ -159,5 +168,18 @@ async fn load_balancing_task(state: Arc<AppState>) {
                 }
             }
         }
+    }
+}
+
+async fn spam_message_task(state: Arc<AppState>) {
+    let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
+    loop {
+        interval.tick().await;
+        let mut w = PacketWriter::new();
+        w.write_string("TestTest");
+        let pkt = encode_datagram(0, PacketType::Message, w.finish().as_ref());
+        state.clients.for_each(|_, arc| {
+            arc.read().send_datagram(pkt.clone());
+        });
     }
 }

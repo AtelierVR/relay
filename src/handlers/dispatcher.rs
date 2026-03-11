@@ -63,7 +63,7 @@ pub async fn dispatch(packet: Packet) {
         PacketType::Voice     => voice::handle(packet).await,
 
         // ── Deprecated / server-only — silently ignore ───────────────────
-        PacketType::Segmentation | PacketType::PasswordRequirement => {
+        PacketType::PasswordRequirement => {
             debug!(
                 "[{}] client {}: deprecated packet {:?}",
                 if is_stream { "Stream" } else { "Datagram" },
