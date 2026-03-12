@@ -374,12 +374,12 @@ impl MasterClient {
 
     pub fn send_log(&self, timestamp: i64, level: &str, message: &str, tag: Option<&str>) {
         let mut data = serde_json::json!({
-            "Timestamp": timestamp,
-            "Level": level,
-            "Message": message,
+            "a": timestamp,
+            "l": level,
+            "m": message
         });
         if let Some(t) = tag {
-            data["Tag"] = serde_json::json!(t);
+            data["t"] = serde_json::json!(t);
         }
         let _ = self.emit("log", data);
     }
@@ -448,12 +448,12 @@ impl MasterClient {
                     break;
                 }
                 let mut data = serde_json::json!({
-                    "Timestamp": entry.timestamp,
-                    "Level": entry.level,
-                    "Message": entry.message,
+                    "a": entry.timestamp,
+                    "l": entry.level,
+                    "m": entry.message,
                 });
                 if let Some(tag) = entry.tag {
-                    data["Tag"] = serde_json::json!(tag);
+                    data["t"] = serde_json::json!(tag);
                 }
                 let msg = WsMessage::new("log", data);
                 if let Ok(json) = serde_json::to_string(&msg) {

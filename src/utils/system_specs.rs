@@ -10,20 +10,36 @@ use sysinfo::Disks;
 #[cfg(not(target_os = "linux"))]
 use sysinfo::System;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CpuSpecsData {
+    pub u: f64,
+    pub c: u64
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemorySpecsData {
+    pub u: u64,
+    pub t: u64
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkSpecsData {
+    pub u: u64,
+    pub b: u64
+}
+
 /// System resource snapshot sent to the MasterServer.
 /// Field names match the TypeScript `RelaySpecs` interface.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpecsData {
-    /// CPU usage percentage of the relay process (0–100).
-    pub c: f64,
+    /// CPU usage of the relay process per core (0.0–1.0 per core, up to num_cores).
+    pub c: CpuSpecsData,
     /// Memory usage: [used, total] in bytes.
-    pub m: [u64; 2],
+    pub m: MemorySpecsData,
     /// Upload bandwidth: [bytes_per_sec, max_bytes_per_sec].
-    pub u: [u64; 2],
+    pub u: NetworkSpecsData,
     /// Download bandwidth: [bytes_per_sec, max_bytes_per_sec].
-    pub d: [u64; 2],
-    /// Storage usage: [used, total] in bytes.
-    pub s: [u64; 2],
+    pub d: NetworkSpecsData,
 }
 
 // ── Process CPU tracking ──────────────────────────────────────────────────────
@@ -104,24 +120,19 @@ fn read_system_clock_ticks() -> Option<u64> {
     }
     None
 }
-
 /// Read process CPU usage percentage.
 /// On Linux: uses /proc/self/stat differential measurement.
-/// Returns total CPU usage of the relay process across all cores (0–100).
-fn read_process_cpu() -> f64 {
+/// Returns total CPU usage of the relay process across all cores (0.0–1.0 per core).
+fn read_process_cpu() -> (f64, u64) {
     #[cfg(target_os = "linux")]
     {
-        // Read /proc/self/stat for process CPU times
         if let Ok(content) = fs::read_to_string("/proc/self/stat") {
             let parts: Vec<&str> = content.split_whitespace().collect();
             if parts.len() > 14 {
-                // Field 14 = utime (CPU time in user mode)
-                // Field 15 = stime (CPU time in kernel mode)
                 let utime = parts[13].parse::<u64>().unwrap_or(0);
                 let stime = parts[14].parse::<u64>().unwrap_or(0);
                 let process_time = utime + stime;
 
-                // Get system clock ticks
                 if let Some(system_ticks) = read_system_clock_ticks() {
                     let mut state = process_cpu_state().lock();
 
@@ -130,12 +141,22 @@ fn read_process_cpu() -> f64 {
                         let system_delta = system_ticks.saturating_sub(state.last_clock_ticks);
 
                         if system_delta > 0 {
-                            // CPU % = (process_delta / system_delta) * num_cpus * 100
-                            let num_cores = num_cpus() as f64;
+                            let cores = num_cpus() as u64;
+                            let num_cores = cores as f64;
+
                             let cpu_usage =
-                                (process_delta as f64 / system_delta as f64) * num_cores * 100.0;
-                            state.cpu_percent = (cpu_usage * 100.0).round() / 100.0;
-                            // Round to 2 decimals
+                                (process_delta as f64 / system_delta as f64) * num_cores;
+
+                            state.cpu_percent = (cpu_usage * 10000.0).round() / 10000.0;
+
+                            state.last_stats = Some(ProcessCpuStats {
+                                utime,
+                                stime,
+                                total_time: process_time,
+                            });
+                            state.last_clock_ticks = system_ticks;
+
+                            return (state.cpu_percent, cores);
                         }
                     }
 
@@ -146,18 +167,18 @@ fn read_process_cpu() -> f64 {
                     });
                     state.last_clock_ticks = system_ticks;
 
-                    return state.cpu_percent;
+                    return (state.cpu_percent, num_cpus() as u64);
                 }
             }
         }
     }
 
-    0.0
+    (0.0, 0)
 }
 
 // ── Memory ────────────────────────────────────────────────────────────────────
 
-fn read_memory() -> [u64; 2] {
+fn read_memory() -> (u64, u64) {
     // Match C# behaviour: report the relay process's own working set, not system-wide usage.
     // Uses /proc/self/status VmRSS on Linux (equivalent to process.WorkingSet64 in C#).
     #[cfg(target_os = "linux")]
@@ -172,11 +193,11 @@ fn read_memory() -> [u64; 2] {
                         .nth(1)
                         .and_then(|s| s.parse().ok())
                         .unwrap_or(0);
-                    return [kb * 1024, total];
+                    return (kb * 1024, total);
                 }
             }
         }
-        [0, total]
+        (0, total)
     }
     // Non-Linux fallback.
     #[cfg(not(target_os = "linux"))]
@@ -323,16 +344,26 @@ fn read_storage() -> [u64; 2] {
 
 /// Collect a full system snapshot matching the TypeScript `RelaySpecs` interface.
 pub fn get_specs() -> SpecsData {
-    let cpu = read_process_cpu();
-    let mem = read_memory();
+    let (used_cpu, core_number) = read_process_cpu();
+    let (memery_used, memory_total) = read_memory();
     let (rate_tx, rate_rx, max_bw) = read_network_rates();
-    let storage = read_storage();
 
     SpecsData {
-        c: cpu,
-        m: mem,
-        u: [rate_tx, max_bw],
-        d: [rate_rx, max_bw],
-        s: storage,
+        c: CpuSpecsData { 
+            u: used_cpu, 
+            c: core_number 
+        },
+        m: MemorySpecsData {
+            u: memery_used,
+            t: memory_total
+        },
+        u: NetworkSpecsData { 
+            u: rate_tx, 
+            b: max_bw
+        },
+        d: NetworkSpecsData { 
+            u: rate_rx, 
+            b: max_bw
+        }
     }
 }
