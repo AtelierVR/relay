@@ -12,7 +12,6 @@
 ///   Broadcast: [iid][TransformType::ByPath][path][flags][...][pId]
 use bytes::Bytes;
 use tracing::debug;
-use tracing_subscriber::field::debug;
 
 use crate::{
     handlers::packet::Packet,
@@ -21,7 +20,7 @@ use crate::{
         buffer::{PacketReader, PacketWriter},
         header::encode_datagram,
         packet_type::PacketType,
-    }, utils::hex_fmt,
+    }
 };
 
 #[repr(u8)]
