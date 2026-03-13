@@ -8,7 +8,7 @@
 /// Response (Success):
 /// [iid: u8][EnterResult: u8][PlayerFlags: u32][PlayerId: u16]
 /// [UserId: u32][UserAddress: string][Display: string][CreatedAt: i64]
-/// [Tps: u8][Threshold: f32][RenderEntity: f32]
+/// [Tps: u8][Threshold: f32][RenderEntity: f32][PropertyResendInterval: u8]
 ///
 /// Broadcast Join: [iid][PlayerFlags][PlayerId][UserId][UserAddress][Display][CreatedAt][Engine][Platform]
 use bitflags::bitflags;
@@ -273,6 +273,7 @@ fn build_enter_response(
     w.write_u8(tps);
     w.write_f32(threshold);
     w.write_f32(inst.render_entity);
+    w.write_u8(inst.property_resend_interval);
     packet.reply_raw(encode_stream_packet(uid, PacketType::Enter, w.finish().as_ref()));
 }
 

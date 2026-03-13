@@ -37,6 +37,11 @@ pub struct Config {
     #[serde(default = "default_keep_alive_interval")]
     pub keep_alive_interval: u16,
 
+    /// Interval in seconds at which clients must re-send unchanged LocalEmit properties so late
+    /// joiners receive up-to-date values. Set to 0 to disable forced re-sends.
+    #[serde(default = "default_property_resend_interval")]
+    pub property_resend_interval: u8,
+
     /// Enable debug-level logging.
     #[serde(default)]
     pub debug: bool,
@@ -137,6 +142,9 @@ fn default_connection_timeout() -> u16 {
 }
 fn default_keep_alive_interval() -> u16 {
     DEFAULT_KEEP_ALIVE_INTERVAL
+}
+fn default_property_resend_interval() -> u8 {
+    DEFAULT_PROPERTY_RESEND_INTERVAL
 }
 
 fn default_lb_enabled() -> bool {

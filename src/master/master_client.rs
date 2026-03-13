@@ -331,6 +331,7 @@ impl MasterClient {
 
                     let mut instance = Instance::new(internal_id, spec.id);
                     instance.capacity = spec.capacity;
+                    instance.property_resend_interval = self.config.property_resend_interval;
 
                     // In debug mode, authorize bots by default
                     if self.config.debug {

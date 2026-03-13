@@ -6,6 +6,7 @@
   "max_instances": 3,
   "connection_timeout": 15,
   "keep_alive_interval": 5,
+  "property_resend_interval": 5,
   "debug": false,
   "load_balancing": {
     "enabled": true,

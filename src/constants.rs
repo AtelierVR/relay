@@ -19,6 +19,9 @@ pub const DGRAM_HEADER_SIZE: usize = 5;  // [Length: u16][UID: u16][Type: u8] â€
 // Session timeouts (seconds).
 pub const DEFAULT_CONNECTION_TIMEOUT: u16 = 15;
 pub const DEFAULT_KEEP_ALIVE_INTERVAL: u16 = 5;
+/// Interval (seconds) at which the server asks clients to re-send unchanged LocalEmit properties.
+/// 0 = feature disabled.
+pub const DEFAULT_PROPERTY_RESEND_INTERVAL: u8 = 5;
 
 // Instance limits.
 pub const DEFAULT_MAX_INSTANCES: u8 = 3;

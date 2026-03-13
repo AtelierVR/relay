@@ -1,7 +1,7 @@
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-use crate::constants::{DEFAULT_RENDER_ENTITY, DEFAULT_THRESHOLD, DEFAULT_TPS};
+use crate::constants::{DEFAULT_PROPERTY_RESEND_INTERVAL, DEFAULT_RENDER_ENTITY, DEFAULT_THRESHOLD, DEFAULT_TPS};
 use crate::player::Player;
 use crate::utils::hashing::verify_password;
 
@@ -26,6 +26,9 @@ pub struct Instance {
     pub threshold: f32,
     /// Maximum entity render distance.
     pub render_entity: f32,
+    /// Interval in seconds at which clients must re-send unchanged LocalEmit properties.
+    /// 0 = feature disabled.
+    pub property_resend_interval: u8,
     /// The virtual world this instance belongs to.
     pub world: World,
     /// Argon2-hashed password (only set when `flags` has `USE_PASSWORD`).
@@ -58,6 +61,7 @@ impl Instance {
             tps: DEFAULT_TPS,
             threshold: DEFAULT_THRESHOLD,
             render_entity: DEFAULT_RENDER_ENTITY,
+            property_resend_interval: DEFAULT_PROPERTY_RESEND_INTERVAL,
             world: World::default(),
             password_hash: None,
             players: Vec::new(),
