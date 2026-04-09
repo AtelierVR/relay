@@ -1,90 +1,41 @@
-# Nox Relay Server
+<div align="center">
+  <img src="logo.png" width="320" alt="NoxVR" />
+  <h1>Relay</h1>
+  <p>High-performance QUIC relay server for NoxVR game instances.</p>
 
-[![Build and Test](https://github.com/AtelierVR/relay/actions/workflows/ci.yml/badge.svg)](https://github.com/AtelierVR/relay/actions/workflows/ci.yml)
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+  [![CI](https://github.com/AtelierVR/relay/actions/workflows/ci.yml/badge.svg)](https://github.com/AtelierVR/relay/actions/workflows/ci.yml)
+  ![Rust](https://img.shields.io/badge/Rust-2021-f74c00?logo=rust&logoColor=white)
+  ![QUIC](https://img.shields.io/badge/Transport-QUIC-6366f1)
+  ![Docker](https://img.shields.io/badge/Docker-ready-2496ed?logo=docker&logoColor=white)
+  ![License](https://img.shields.io/badge/License-AGPL--3.0-22c55e)
 
-High-performance QUIC relay server for the Nox platform.
+  <p>Part of the <a href="https://github.com/AtelierVR"><strong>NoxVR</strong></a> ecosystem</p>
+</div>
 
-## Quick Start
+---
 
-```bash
-# Build and run
-cargo build --release
-./target/release/noxrelay
+## Overview
 
-# Or with Docker
-docker-compose up -d
-```
-
-## Configuration
-
-Copy `config.example.json` to `config.json` and edit:
-
-```json
-{
-  "port": 23032,
-  "node_gateway": "http://localhost:3042",
-  "use_address": "127.0.0.1:23032",
-  "token": "",
-  "max_instances": 3,
-  "connection_timeout": 15,
-  "keep_alive_interval": 5,
-  "debug": false
-}
-```
-
-### Automatic Node Discovery
-
-The relay can automatically discover the node gateway URL from a domain name:
-
-```rust
-use noxrelay::utils::node_discovery::find_node_gateway;
-
-// Discovers via DNS TXT record (_nox.example.com) or /.well-known/nox
-let gateway = find_node_gateway("example.com").await?;
-// Returns: "https://example.com:3042" or "http://node.example.com"
-
-// Works with IP addresses
-let gateway = find_node_gateway("192.168.1.100:3042").await?;
-// Returns: "http://192.168.1.100:3042"
-```
-
-**DNS TXT Record Setup** (optional):
-```
-_nox.example.com. 300 IN TXT "mg=https://node.example.com:3042"
-```
-
-## Docker
-
-```bash
-npm run compose          # Production (optimized, ~15MB)
-npm run compose:dev      # Development (with debug symbols)
-npm run compose:fast     # Quick testing
-```
-
-See [docker/BUILD.md](docker/BUILD.md) for detailed Docker documentation.
-
-## Development
-
-```bash
-# Format and lint
-cargo fmt && cargo clippy -- -D warnings
-
-# Run tests
-cargo test
-```
+**NoxVR Relay** is a high-throughput relay written in Rust that manages real-time multiplayer sessions for the NoxVR platform. It bridges QUIC-connected game clients with the central node server over WebSocket.
 
 ## Features
 
-- QUIC transport with built-in encryption
-- WebSocket connection to node server
-- Multi-instance support
-- RSA authentication + Argon2 hashing
-- Real-time system monitoring
-- Optimized for 1000+ concurrent clients
+- **QUIC transport** — encrypted, low-latency connections via `quinn`
+- **Multi-instance** — manages multiple concurrent game world instances
+- **RSA + Argon2 authentication** — secure client and server handshake
+- **WebSocket bridge** — real-time communication with the node server
+- **Automatic node discovery** — via DNS TXT record or `.well-known/nox`
+- **System monitoring** — real-time resource usage streaming
+- **Optimized** — designed to handle 1000+ concurrent clients
 
-## License
+## Documentation
 
-AGPL-3.0 - Copyright © 2026 Hactazia
+- [Getting Started](docs/getting-started.md) — build, Docker, configuration
+- [Development](docs/development.md) — commands and project structure
 
-See [LICENSE](LICENSE) for details.
+---
+
+<div align="center">
+  <p>Made with ♥ by <a href="https://github.com/AtelierVR">AtelierVR</a> &nbsp;·&nbsp; <a href="https://www.gnu.org/licenses/agpl-3.0">AGPL-3.0</a></p>
+  <p>Part of the <strong>NoxVR</strong> project — a federated social VR platform</p>
+</div>
