@@ -17,7 +17,7 @@ use crate::utils::system_specs::get_specs;
 
 use crate::{
     client::ClientManager,
-    // commands::{CommandContext, CommandRegistry}, // TODO: Commands not yet implemented
+    commands::{CommandContext, CommandRegistry},
     config::Config,
     instance::InstanceManager,
     utils::log_buffer::LogBuffer,
@@ -57,8 +57,8 @@ pub struct MasterClient {
     connected: Arc<std::sync::atomic::AtomicBool>,
     /// Real-time log forwarder: set during an active WS session.
     log_forwarder: LogForwarder,
-    // Command registry for handling remote commands (TODO: not yet implemented).
-    // command_registry: CommandRegistry,
+    /// Command registry for handling remote commands.
+    command_registry: CommandRegistry,
 }
 
 impl MasterClient {
@@ -74,15 +74,14 @@ impl MasterClient {
             .unwrap_or_default()
             .as_millis() as i64;
 
-        // TODO: Commands not yet implemented
-        // let command_context = CommandContext::new(
-        //     Arc::clone(&config),
-        //     Arc::clone(&clients),
-        //     Arc::clone(&instances),
-        //     start_time_ms,
-        //     vec![], // Will be filled by CommandRegistry
-        // );
-        // let command_registry = CommandRegistry::new(command_context);
+        let command_context = CommandContext::new(
+            Arc::clone(&config),
+            Arc::clone(&clients),
+            Arc::clone(&instances),
+            start_time_ms,
+            vec![], // Will be filled by CommandRegistry
+        );
+        let command_registry = CommandRegistry::new(command_context);
 
         Self {
             config,
@@ -95,7 +94,7 @@ impl MasterClient {
             start_time_ms,
             connected: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             log_forwarder,
-            // command_registry, // TODO: Commands not yet implemented
+            command_registry,
         }
     }
 
@@ -208,6 +207,10 @@ impl MasterClient {
     pub async fn on_connected(&self) {
         use crate::instance::{Instance, InstanceFlags, World};
 
+        // Small delay to ensure send_task is ready before sending messages
+        // This prevents race condition where notify_one() is called before notified().await
+        // tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
         info!("[MasterClient] on_connected() started");
 
         let max_instances = self.config.max_instances;
@@ -277,7 +280,9 @@ impl MasterClient {
 
         // Calculate how many additional instances we need
         let current_count = self.instances.count(); // May have changed after sync
+        info!("[MasterClient] Re-counted instances: current_count={}, max_instances={}", current_count, max_instances);
         let needed = max_instances.saturating_sub(current_count as u8);
+        info!("[MasterClient] Calculated needed instances: {}", needed);
 
         if needed == 0 {
             debug!(
@@ -383,6 +388,11 @@ impl MasterClient {
             data["t"] = serde_json::json!(t);
         }
         let _ = self.emit("log", data);
+    }
+
+    /// Handle incoming commands from the master server
+    fn handle_command(&self, content: &str) {
+        self.command_registry.execute(content);
     }
 
     // ── Reconnect loop ───────────────────────────────────────────────────
@@ -576,7 +586,7 @@ impl MasterClient {
         // Correlated response?
         if let Some(id) = &envelope.id {
             if let Some((_, tx)) = self.pending.remove(id) {
-                let _ = tx.send(envelope.data);
+                let _ = tx.send(envelope.payload);
                 return;
             }
         }
@@ -584,7 +594,7 @@ impl MasterClient {
         // Server-initiated messages.
         match envelope.msg_type.as_str() {
             "relay_connected" => {
-                if let Ok(rc) = serde_json::from_value::<RelayConnected>(envelope.data) {
+                if let Ok(rc) = serde_json::from_value::<RelayConnected>(envelope.payload) {
                     info!(
                         "[MasterClient] relay_connected id={} master_address={}",
                         rc.id, rc.master_address
@@ -592,7 +602,7 @@ impl MasterClient {
                 }
             }
             "drop_instance" => {
-                if let Ok(di) = serde_json::from_value::<DropInstance>(envelope.data) {
+                if let Ok(di) = serde_json::from_value::<DropInstance>(envelope.payload) {
                     warn!(
                         "[MasterClient] drop_instance #{}: {}",
                         di.instance_id,
@@ -624,7 +634,7 @@ impl MasterClient {
                     &self.instances,
                     self.config.max_instances,
                     self.start_time_ms,
-                    self.config.port,
+                    &self.config,
                 );
                 let mut msg = WsMessage::new("status", status);
                 if let Some(id) = envelope.id {
@@ -635,7 +645,7 @@ impl MasterClient {
                 }
             }
             "logs" => {
-                if let Ok(req) = serde_json::from_value::<LogsRequest>(envelope.data.clone()) {
+                if let Ok(req) = serde_json::from_value::<LogsRequest>(envelope.payload.clone()) {
                     let entries = {
                         let buf = self.log_buf.lock();
                         if req.since > 0 {
@@ -654,7 +664,7 @@ impl MasterClient {
                 }
             }
             "has_instance" => {
-                if let Ok(req) = serde_json::from_value::<HasInstanceReq>(envelope.data.clone()) {
+                if let Ok(req) = serde_json::from_value::<HasInstanceReq>(envelope.payload.clone()) {
                     let exists = self
                         .instances
                         .all()
@@ -671,7 +681,7 @@ impl MasterClient {
                 }
             }
             "get_clients" => {
-                if let Ok(req) = serde_json::from_value::<GetClientsReq>(envelope.data.clone()) {
+                if let Ok(req) = serde_json::from_value::<GetClientsReq>(envelope.payload.clone()) {
                     let total = self.clients.count() as u32;
                     let mut clients: Vec<ClientInfo> = Vec::new();
                     let mut count = 0;
@@ -708,7 +718,7 @@ impl MasterClient {
                 }
             }
             "get_instances" => {
-                if let Ok(req) = serde_json::from_value::<GetInstancesReq>(envelope.data.clone()) {
+                if let Ok(req) = serde_json::from_value::<GetInstancesReq>(envelope.payload.clone()) {
                     let all_instances = self.instances.all();
                     let total = all_instances.len() as u32;
                     let instances: Vec<InstanceInfo> = all_instances
@@ -764,15 +774,14 @@ impl MasterClient {
                 }
             }
             "ping" => {
-                if let Ok(_resp) = serde_json::from_value::<PingResponse>(envelope.data.clone()) {
+                if let Ok(_resp) = serde_json::from_value::<PingResponse>(envelope.payload.clone()) {
                     // Silently handle ping response - latency could be calculated if needed
                 }
             }
             "command" => {
-                if let Ok(req) = serde_json::from_value::<CommandRequest>(envelope.data.clone()) {
+                if let Ok(req) = serde_json::from_value::<CommandRequest>(envelope.payload.clone()) {
                     info!("[Command] $ {}", req.content);
-                    // TODO: Commands not yet implemented
-                    // self.command_registry.execute(&req.content);
+                    self.handle_command(&req.content);
                 }
             }
             other => {

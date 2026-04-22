@@ -6,21 +6,21 @@ use crate::utils::system_specs::SpecsData;
 
 /// The JSON envelope exchanged with the MasterServer WebSocket.
 ///
-/// `{ "type": "...", "data": {...}, "id": "uuid" }`
+/// `{ "type": "...", "payload": {...}, "id": "uuid" }`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WsMessage<T> {
     #[serde(rename = "type")]
     pub msg_type: String,
-    pub data: T,
+    pub payload: T,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
 }
 
 impl<T: Serialize> WsMessage<T> {
-    pub fn new(msg_type: impl Into<String>, data: T) -> Self {
+    pub fn new(msg_type: impl Into<String>, payload: T) -> Self {
         Self {
             msg_type: msg_type.into(),
-            data,
+            payload,
             id: None,
         }
     }

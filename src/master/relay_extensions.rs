@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     client::ClientManager,
+    config::Config,
     constants::{ENGINE, PROTOCOL_VERSION, VERSION},
     instance::InstanceManager,
     utils::system_specs::get_specs,
@@ -15,10 +16,13 @@ pub fn build_status(
     instances: &Arc<InstanceManager>,
     max_instances: u8,
     start_time_ms: i64,
-    port: u16,
+    config: &Arc<Config>,
 ) -> RelayStatus {
     let mut a = std::collections::HashMap::new();
-    a.insert("quic".to_string(), format!("0.0.0.0:{}", port));
+    let quic_address = config.use_address.as_ref()
+        .map(|addr| addr.clone())
+        .unwrap_or_else(|| format!("0.0.0.0:{}", config.port));
+    a.insert("quic".to_string(), quic_address);
     RelayStatus {
         i: instances.count() as u32,
         c: clients.count() as u32,

@@ -2,6 +2,7 @@
 
 mod avatar;
 mod client;
+mod commands;
 mod config;
 mod constants;
 mod handlers;

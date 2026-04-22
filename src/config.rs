@@ -21,6 +21,11 @@ pub struct Config {
     #[serde(default = "default_node_address")]
     pub node_address: String,
 
+    /// Public address of this relay advertised to clients (e.g. "hactazia.fr:23000").
+    /// If not set, defaults to "0.0.0.0:{port}".
+    #[serde(default)]
+    pub use_address: Option<String>,
+
     /// Bearer token for MasterServer authentication.
     #[serde(default)]
     pub token: String,
