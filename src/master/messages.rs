@@ -284,10 +284,10 @@ pub struct GetInstancesResp {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstanceInfo {
-    pub i: String,          // instance master ID
-    pub n: u32,             // internal ID
-    pub p: Vec<PlayerInfo>, // players
+    pub i: u32,             // internal ID (relay-local slot 0–254)
+    pub n: u32,             // node ID (master/DB ID)
     pub f: u32,             // flags
+    pub p: u32,             // player count (all, including HIDE_IN_LIST)
     pub w: String,          // world
     pub c: u16,             // capacity
 }
@@ -299,4 +299,27 @@ pub struct PlayerInfo {
     pub d: String,         // display name
     pub f: u32,            // flags
     pub u: Option<String>, // user identifier (e.g. "1@hactazia.fr"), None if unauthenticated
+}
+
+// ─── get_players ──────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetPlayersReq {
+    /// Internal instance ID (matches InstanceInfo.i).
+    pub i: u32,
+    #[serde(default)]
+    pub l: usize,
+    #[serde(default)]
+    pub o: usize,
+    /// When true, include players with the HIDE_IN_LIST flag. Default false.
+    #[serde(default)]
+    pub a: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetPlayersResp {
+    /// Total number of visible (or all, if all=true) players in the instance.
+    pub t: u32,
+    /// The requested page of players.
+    pub i: Vec<PlayerInfo>,
 }

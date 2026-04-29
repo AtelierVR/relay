@@ -27,7 +27,8 @@ use crate::{
 use super::{
     messages::{
         ClientInfo, CommandRequest, DropInstance, GetClientsReq, GetClientsResp, GetInstancesReq,
-        GetInstancesResp, HasInstanceReq, HasInstanceResp, InstanceInfo, LogsRequest, PingResponse,
+        GetInstancesResp, GetPlayersReq, GetPlayersResp, HasInstanceReq, HasInstanceResp,
+        InstanceInfo, LogsRequest, PingResponse,
         PlayerInfo, RelayConnected, RequestInstancesReq, RequestInstancesResp, ResolveUserRequest,
         ResolveUserResponse, SyncInstanceData, SyncInstancesReq, SyncInstancesResp, WsMessage,
     },
@@ -728,36 +729,10 @@ impl MasterClient {
                         .map(|arc| {
                             let inst = arc.read();
                             InstanceInfo {
-                                i: inst.master_id.to_string(),
-                                n: inst.internal_id as u32,
-                                p: inst
-                                    .get_players()
-                                    .iter()
-                                    .map(|p| {
-                                    let client_arc = self.clients.get(p.client_id);
-                                    let (display, user_id) = if let Some(arc) = client_arc {
-                                        let c = arc.read();
-                                        let disp = p.display.clone().unwrap_or_else(|| {
-                                            c.user
-                                                .as_ref()
-                                                .map(|u| u.display_name.clone())
-                                                .unwrap_or_else(|| "Unknown".to_string())
-                                        });
-                                        let uid = c.user.as_ref().map(|u| u.to_identifier());
-                                        (disp, uid)
-                                    } else {
-                                        (p.display.clone().unwrap_or_else(|| "Unknown".to_string()), None)
-                                    };
-                                    PlayerInfo {
-                                        i: p.id.to_string(),
-                                        c: p.client_id.to_string(),
-                                        d: display,
-                                        f: p.flags.bits(),
-                                        u: user_id,
-                                    }
-                                })
-                                    .collect(),
+                                i: inst.internal_id as u32,
+                                n: inst.master_id,
                                 f: inst.flags.bits(),
+                                p: inst.player_count() as u32,
                                 w: format!("{}@{}", inst.world.master_id, inst.world.address),
                                 c: inst.capacity,
                             }
@@ -765,6 +740,59 @@ impl MasterClient {
                         .collect();
                     let resp = GetInstancesResp { total, instances };
                     let mut msg = WsMessage::new("get_instances", resp);
+                    if let Some(id) = envelope.id {
+                        msg = msg.with_id(id);
+                    }
+                    if let Ok(json) = serde_json::to_string(&msg) {
+                        self.emit_raw(json);
+                    }
+                }
+            }
+            "get_players" => {
+                if let Ok(req) = serde_json::from_value::<GetPlayersReq>(envelope.payload.clone()) {
+                    use crate::player::PlayerFlags;
+                    let all_instances = self.instances.all();
+                    let target = all_instances.iter().find(|arc| arc.read().internal_id as u32 == req.i);
+                    let (total, page) = if let Some(arc) = target {
+                        let inst = arc.read();
+                        let visible: Vec<&crate::player::Player> = inst
+                            .get_players()
+                            .iter()
+                            .filter(|p| req.a || !p.flags.contains(PlayerFlags::HIDE_IN_LIST))
+                            .collect();
+                        let t = visible.len() as u32;
+                        let page: Vec<PlayerInfo> = visible
+                            .iter()
+                            .skip(req.o)
+                            .take(if req.l > 0 { req.l } else { 20 })
+                            .map(|p| {
+                                let client_arc = self.clients.get(p.client_id);
+                                let (display, user_id) = if let Some(arc) = client_arc {
+                                    let c = arc.read();
+                                    let disp = p.display.clone().unwrap_or_else(|| {
+                                        c.user.as_ref().map(|u| u.display_name.clone())
+                                            .unwrap_or_else(|| "Unknown".to_string())
+                                    });
+                                    let uid = c.user.as_ref().map(|u| u.to_identifier());
+                                    (disp, uid)
+                                } else {
+                                    (p.display.clone().unwrap_or_else(|| "Unknown".to_string()), None)
+                                };
+                                PlayerInfo {
+                                    i: p.id.to_string(),
+                                    c: p.client_id.to_string(),
+                                    d: display,
+                                    f: p.flags.bits(),
+                                    u: user_id,
+                                }
+                            })
+                            .collect();
+                        (t, page)
+                    } else {
+                        (0, vec![])
+                    };
+                    let resp = GetPlayersResp { t: total, i: page };
+                    let mut msg = WsMessage::new("get_players", resp);
                     if let Some(id) = envelope.id {
                         msg = msg.with_id(id);
                     }
