@@ -32,7 +32,7 @@ fn non_handshaked_client_rejected() {
     let state = make_state();
     let _rx = register_client(&state, 1);
     // auth_state = None → must return empty
-    let resp = latency::handle(&state, 1, 0, latency_payload(123, 456));
+    let resp = latency::handle_inner(&state, 1, 0, latency_payload(123, 456));
     assert!(resp.is_empty(), "non-handshaked client must be rejected");
 }
 
@@ -40,7 +40,7 @@ fn non_handshaked_client_rejected() {
 fn unknown_client_rejected() {
     let state = make_state();
     // client 99 not registered
-    let resp = latency::handle(&state, 99, 0, latency_payload(0, 0));
+    let resp = latency::handle_inner(&state, 99, 0, latency_payload(0, 0));
     assert!(resp.is_empty());
 }
 
@@ -49,7 +49,7 @@ fn handshaked_client_gets_response() {
     let state = make_state();
     let _rx = register_client(&state, 1);
     set_handshaked(&state, 1);
-    let resp = latency::handle(&state, 1, 5, latency_payload(1_700_000_000_000, 42));
+    let resp = latency::handle_inner(&state, 1, 5, latency_payload(1_700_000_000_000, 42));
     assert!(
         !resp.is_empty(),
         "handshaked client must receive a response"
@@ -61,7 +61,7 @@ fn response_packet_type_and_uid() {
     let state = make_state();
     let _rx = register_client(&state, 1);
     set_handshaked(&state, 1);
-    let resp = latency::handle(&state, 1, 77, latency_payload(0, 0));
+    let resp = latency::handle_inner(&state, 1, 77, latency_payload(0, 0));
     let (uid, ptype, _) = decode_stream(resp);
     assert_eq!(uid, 77, "UID must be echoed");
     assert_eq!(ptype, PacketType::Latency);
@@ -73,7 +73,7 @@ fn response_echoes_client_timestamp() {
     let _rx = register_client(&state, 1);
     set_handshaked(&state, 1);
     let client_ts = 1_600_000_000_123_i64;
-    let resp = latency::handle(&state, 1, 0, latency_payload(client_ts, 0));
+    let resp = latency::handle_inner(&state, 1, 0, latency_payload(client_ts, 0));
     let (_, _, payload) = decode_stream(resp);
     let mut r = PacketReader::new(payload);
     let echoed_ts = r.read_i64();
@@ -88,7 +88,7 @@ fn response_server_timestamp_is_positive() {
     let state = make_state();
     let _rx = register_client(&state, 1);
     set_handshaked(&state, 1);
-    let resp = latency::handle(&state, 1, 0, latency_payload(0, 0));
+    let resp = latency::handle_inner(&state, 1, 0, latency_payload(0, 0));
     let (_, _, payload) = decode_stream(resp);
     let mut r = PacketReader::new(payload);
     r.skip(8); // skip echoed client_ts
@@ -105,7 +105,7 @@ fn response_echoes_client_long() {
     let _rx = register_client(&state, 1);
     set_handshaked(&state, 1);
     let magic: i64 = 0x_DEAD_BEEF_0042_i64;
-    let resp = latency::handle(&state, 1, 0, latency_payload(0, magic));
+    let resp = latency::handle_inner(&state, 1, 0, latency_payload(0, magic));
     let (_, _, payload) = decode_stream(resp);
     let mut r = PacketReader::new(payload);
     r.skip(8); // client_ts
@@ -123,7 +123,7 @@ fn response_payload_is_exactly_24_bytes() {
     let state = make_state();
     let _rx = register_client(&state, 1);
     set_handshaked(&state, 1);
-    let resp = latency::handle(&state, 1, 0, latency_payload(1, 2));
+    let resp = latency::handle_inner(&state, 1, 0, latency_payload(1, 2));
     let (_, _, payload) = decode_stream(resp);
     assert_eq!(
         payload.len(),
@@ -140,7 +140,7 @@ fn response_fields_order_matches_c_sharp() {
     set_handshaked(&state, 1);
     let client_ts: i64 = 100_000;
     let client_long: i64 = 200_000;
-    let resp = latency::handle(&state, 1, 0, latency_payload(client_ts, client_long));
+    let resp = latency::handle_inner(&state, 1, 0, latency_payload(client_ts, client_long));
     let (_, _, payload) = decode_stream(resp);
     let mut r = PacketReader::new(payload);
     // 1) echoed client timestamp

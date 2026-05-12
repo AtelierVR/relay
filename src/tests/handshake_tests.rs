@@ -36,7 +36,7 @@ fn handshake_payload(protocol: u16, engine: &str, platform: &str) -> Bytes {
 fn wrong_protocol_returns_empty() {
     let state = make_state();
     let _rx = register_client(&state, 1);
-    let response = handshake::handle(&state, 1, 99, handshake_payload(0xFFFF, "Unity", "PC"));
+    let response = handshake::handle_inner(&state, 1, 99, handshake_payload(0xFFFF, "Unity", "PC"));
     assert!(
         response.is_empty(),
         "incompatible protocol must return empty Bytes"
@@ -47,7 +47,7 @@ fn wrong_protocol_returns_empty() {
 fn correct_protocol_returns_response() {
     let state = make_state();
     let _rx = register_client(&state, 1);
-    let response = handshake::handle(
+    let response = handshake::handle_inner(
         &state,
         1,
         1,
@@ -63,7 +63,7 @@ fn correct_protocol_returns_response() {
 fn response_is_handshake_packet_type() {
     let state = make_state();
     let _rx = register_client(&state, 1);
-    let response = handshake::handle(
+    let response = handshake::handle_inner(
         &state,
         1,
         7,
@@ -80,7 +80,7 @@ fn response_payload_matches_c_sharp_format() {
 
     let state = make_state();
     let _rx = register_client(&state, 42);
-    let response = handshake::handle(
+    let response = handshake::handle_inner(
         &state,
         42,
         1,
@@ -124,7 +124,7 @@ fn sets_client_auth_state_to_handshaked() {
         state.clients.get(5).unwrap().read().auth_state,
         AuthState::None
     );
-    handshake::handle(
+    handshake::handle_inner(
         &state,
         5,
         0,
@@ -141,7 +141,7 @@ fn sets_client_auth_state_to_handshaked() {
 fn stores_engine_and_platform() {
     let state = make_state();
     let _rx = register_client(&state, 10);
-    handshake::handle(
+    handshake::handle_inner(
         &state,
         10,
         0,
@@ -158,7 +158,7 @@ fn response_uid_matches_request_uid() {
     let state = make_state();
     let _rx = register_client(&state, 1);
     for uid in [0_u16, 1, 100, u16::MAX] {
-        let resp = handshake::handle(
+        let resp = handshake::handle_inner(
             &state,
             1,
             uid,
@@ -179,7 +179,7 @@ fn response_uid_matches_request_uid() {
 fn wrong_protocol_does_not_mutate_auth_state() {
     let state = make_state();
     let _rx = register_client(&state, 3);
-    handshake::handle(&state, 3, 0, handshake_payload(0x9999, "X", "Y"));
+    handshake::handle_inner(&state, 3, 0, handshake_payload(0x9999, "X", "Y"));
     assert_eq!(
         state.clients.get(3).unwrap().read().auth_state,
         AuthState::None,

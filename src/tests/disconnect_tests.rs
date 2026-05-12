@@ -8,7 +8,7 @@
 use bytes::Bytes;
 
 use crate::{
-    handlers::disconnect::{self, handle_inner},
+    handlers::disconnect::handle_inner,
     instance::Instance,
     player::{Player, PlayerStatus},
     proto::buffer::PacketWriter,

@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
+use bytes::Bytes;
 use tracing::{info, warn};
 
 use crate::{
     client::client::AuthState,
     constants::PROTOCOL_VERSION,
-    handlers::packet::Packet,
+    handlers::{context::AppState, packet::Packet},
     master::messages::EventClientConnected,
     proto::{
         buffer::{PacketReader, PacketWriter},
@@ -20,17 +23,23 @@ enum HandshakeFlags {
 }
 
 pub fn handle(mut packet: Packet) {
-    let state = &packet.state;
+    let state = packet.state.clone();
     let client_id = packet.client_id();
     let uid = packet.uid;
     let payload = packet.payload.clone();
+    let resp = handle_inner(&state, client_id, uid, payload);
+    if !resp.is_empty() {
+        packet.reply_raw(resp);
+    }
+}
 
+pub fn handle_inner(state: &Arc<AppState>, client_id: u16, uid: u16, payload: Bytes) -> Bytes {
     let mut r = PacketReader::new(payload);
     let protocol = r.read_u16();
 
     if protocol != PROTOCOL_VERSION {
         warn!("[Handshake] client {client_id}: incompatible protocol {protocol} (expected {PROTOCOL_VERSION})");
-        return;
+        return Bytes::new();
     }
 
     let engine = r.read_string().unwrap_or_default();
@@ -95,9 +104,5 @@ pub fn handle(mut packet: Packet) {
     w.write_u16(state.config.connection_timeout);
     w.write_u16(state.config.keep_alive_interval);
 
-    packet.reply_raw(encode_stream_packet(
-        uid,
-        PacketType::Handshake,
-        w.finish().as_ref(),
-    ));
+    encode_stream_packet(uid, PacketType::Handshake, w.finish().as_ref())
 }
