@@ -204,7 +204,7 @@ fn read_memory() -> (u64, u64) {
     {
         let mut sys = System::new_all();
         sys.refresh_memory();
-        [sys.used_memory(), sys.total_memory()]
+        (sys.used_memory(), sys.total_memory())
     }
 }
 

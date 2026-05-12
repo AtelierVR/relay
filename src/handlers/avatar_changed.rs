@@ -5,7 +5,7 @@
 /// Broadcast to others: [iid: u8][AvatarChangedResult::Changing][player_id: u16]
 ///                      [avatar_id: u32][server: string][version: u16]
 use bytes::Bytes;
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::{
     avatar::Avatar,
