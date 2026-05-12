@@ -699,11 +699,12 @@ impl MasterClient {
                         }
                         let c = arc.read();
                         clients.push(ClientInfo {
-                            i: c.id.to_string(),
+                            i: c.id,
                             a: c.address.clone(),
                             p: c.platform.clone(),
                             e: c.engine.clone(),
                             u: c.user.as_ref().map(|u| u.to_identifier()),
+                            t: c.connected_at,
                         });
                         count += 1;
                     });
@@ -779,11 +780,12 @@ impl MasterClient {
                                     (p.display.clone().unwrap_or_else(|| "Unknown".to_string()), None)
                                 };
                                 PlayerInfo {
-                                    i: p.id.to_string(),
-                                    c: p.client_id.to_string(),
+                                    i: p.id,
+                                    c: p.client_id,
                                     d: display,
                                     f: p.flags.bits(),
                                     u: user_id,
+                                    j: p.created_at,
                                 }
                             })
                             .collect();

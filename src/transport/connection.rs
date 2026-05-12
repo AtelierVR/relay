@@ -12,7 +12,7 @@ use crate::{
         dispatcher::dispatch,
         packet::Packet,
     },
-    master::messages::{EventClientConnected, EventClientDisconnected},
+    master::messages::EventClientDisconnected,
     proto::{
         frame::{parse_datagram, read_framed, write_framed},
         header::decode_stream_header,
@@ -34,11 +34,7 @@ pub async fn handle_connection(state: Arc<AppState>, conn: Connection) -> Result
     client_arc.write().address = remote_addr.clone();
     state.clients.add(Arc::clone(&client_arc));
     debug!("[Connection] client {client_id} connected from {remote_addr}");
-
-    let _ = state.master.emit("client_connected", EventClientConnected {
-        id: client_id.to_string(),
-        address: remote_addr.clone(),
-    });
+    // client_connected is emitted after the handshake (when platform/engine are known).
 
     let conn1 = conn.clone();
     let conn2 = conn.clone();
@@ -177,13 +173,10 @@ pub async fn handle_connection(state: Arc<AppState>, conn: Connection) -> Result
     // Clean up: leave all instances then remove the client.
     crate::handlers::quit::leave_all_instances(&state, client_id);
 
-    // Collect info before removal for the disconnect event.
-    let user_identifier = state.clients.get(client_id)
-        .and_then(|arc| arc.read().user.as_ref().map(|u| u.to_identifier()));
     let _ = state.master.emit("client_disconnected", EventClientDisconnected {
-        id: client_id.to_string(),
-        address: remote_addr.clone(),
-        user: user_identifier,
+        id: client_id,
+        reason: "disconnected".to_string(),
+        kind:   "normal".to_string(),
     });
 
     state.clients.remove(client_id);

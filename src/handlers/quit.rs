@@ -42,6 +42,17 @@ impl QuitType {
     pub fn is_moderation_action(self) -> bool {
         matches!(self, Self::ModerationKick | Self::VoteKick)
     }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Timeout => "timeout",
+            Self::ModerationKick => "moderation_kick",
+            Self::VoteKick => "vote_kick",
+            Self::ConfigurationError => "configuration_error",
+            Self::UnknownError => "unknown_error",
+        }
+    }
 }
 
 pub async fn handle(mut packet: Packet) {
@@ -167,13 +178,11 @@ pub async fn handle(mut packet: Packet) {
     }
 
     // Notify node of player leaving.
-    let user_id_opt = state.clients.get(client_id)
-        .and_then(|arc| arc.read().user.as_ref().map(|u| u.to_identifier()));
     let _ = state.master.emit("player_leave", EventPlayerLeave {
-        client_id: client_id.to_string(),
-        player_id: self_player_id.to_string(),
-        instance_id: iid.to_string(),
-        user: user_id_opt,
+        player_id: self_player_id,
+        internal_id: iid,
+        kind: quit_type.as_str().to_string(),
+        reason: reason.as_deref().unwrap_or_default().to_string(),
     });
 
     packet.reply_raw(make_quit_response(uid, iid, quit_type, reason.as_deref()));
@@ -237,13 +246,11 @@ pub fn leave_all_instances(state: &AppState, client_id: u16) {
         inst_arc.write().remove_player(player_id);
 
         // Notify node of player leaving (leave_all path, e.g. on disconnect).
-        let user_id_opt = state.clients.get(client_id)
-            .and_then(|arc| arc.read().user.as_ref().map(|u| u.to_identifier()));
         let _ = state.master.emit("player_leave", EventPlayerLeave {
-            client_id: client_id.to_string(),
-            player_id: player_id.to_string(),
-            instance_id: iid.to_string(),
-            user: user_id_opt,
+            player_id: player_id,
+            internal_id: iid,
+            kind: "normal".to_string(),
+            reason: String::new(),
         });
     }
 }

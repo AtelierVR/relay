@@ -152,6 +152,7 @@ pub async fn handle(mut packet: Packet) {
     player.flags = p_flags;
     player.status = PlayerStatus::Preparing;
     player.display = display.filter(|s| !s.trim().is_empty());
+    let joined_at = player.created_at;
 
     // Add to instance.
     {
@@ -177,21 +178,20 @@ pub async fn handle(mut packet: Packet) {
 
     // Notify node of player joining.
     {
-        let (user_id_opt, display_name) = if let Some(arc) = state.clients.get(client_id) {
+        let display_name = if let Some(arc) = state.clients.get(client_id) {
             let c = arc.read();
-            let uid = c.user.as_ref().map(|u| u.to_identifier());
-            let disp = c.user.as_ref().map(|u| u.display_name.clone())
-                .unwrap_or_else(|| format!("Player {}", player_id));
-            (uid, disp)
+            c.user.as_ref().map(|u| u.display_name.clone())
+                .unwrap_or_else(|| format!("Player {}", player_id))
         } else {
-            (None, format!("Player {}", player_id))
+            format!("Player {}", player_id)
         };
         let _ = state.master.emit("player_join", EventPlayerJoin {
-            client_id: client_id.to_string(),
-            player_id: player_id.to_string(),
-            instance_id: iid.to_string(),
-            user: user_id_opt,
+            client_id: client_id,
+            player_id: player_id,
             display: display_name,
+            internal_id: iid,
+            flags: p_flags.bits(),
+            joined_at,
         });
     }
 
