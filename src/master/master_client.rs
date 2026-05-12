@@ -28,9 +28,9 @@ use super::{
     messages::{
         ClientInfo, CommandRequest, DropInstance, GetClientsReq, GetClientsResp, GetInstancesReq,
         GetInstancesResp, GetPlayersReq, GetPlayersResp, HasInstanceReq, HasInstanceResp,
-        InstanceInfo, LogsRequest, PingResponse,
-        PlayerInfo, RelayConnected, RequestInstancesReq, RequestInstancesResp, ResolveUserRequest,
-        ResolveUserResponse, SyncInstanceData, SyncInstancesReq, SyncInstancesResp, WsMessage,
+        InstanceInfo, LogsRequest, PingResponse, PlayerInfo, RelayConnected, RequestInstancesReq,
+        RequestInstancesResp, ResolveUserRequest, ResolveUserResponse, SyncInstanceData,
+        SyncInstancesReq, SyncInstancesResp, WsMessage,
     },
     relay_extensions,
 };
@@ -281,7 +281,10 @@ impl MasterClient {
 
         // Calculate how many additional instances we need
         let current_count = self.instances.count(); // May have changed after sync
-        info!("[MasterClient] Re-counted instances: current_count={}, max_instances={}", current_count, max_instances);
+        info!(
+            "[MasterClient] Re-counted instances: current_count={}, max_instances={}",
+            current_count, max_instances
+        );
         let needed = max_instances.saturating_sub(current_count as u8);
         info!("[MasterClient] Calculated needed instances: {}", needed);
 
@@ -665,7 +668,8 @@ impl MasterClient {
                 }
             }
             "has_instance" => {
-                if let Ok(req) = serde_json::from_value::<HasInstanceReq>(envelope.payload.clone()) {
+                if let Ok(req) = serde_json::from_value::<HasInstanceReq>(envelope.payload.clone())
+                {
                     let exists = self
                         .instances
                         .all()
@@ -720,7 +724,8 @@ impl MasterClient {
                 }
             }
             "get_instances" => {
-                if let Ok(req) = serde_json::from_value::<GetInstancesReq>(envelope.payload.clone()) {
+                if let Ok(req) = serde_json::from_value::<GetInstancesReq>(envelope.payload.clone())
+                {
                     let all_instances = self.instances.all();
                     let total = all_instances.len() as u32;
                     let instances: Vec<InstanceInfo> = all_instances
@@ -753,7 +758,9 @@ impl MasterClient {
                 if let Ok(req) = serde_json::from_value::<GetPlayersReq>(envelope.payload.clone()) {
                     use crate::player::PlayerFlags;
                     let all_instances = self.instances.all();
-                    let target = all_instances.iter().find(|arc| arc.read().internal_id as u32 == req.i);
+                    let target = all_instances
+                        .iter()
+                        .find(|arc| arc.read().internal_id as u32 == req.i);
                     let (total, page) = if let Some(arc) = target {
                         let inst = arc.read();
                         let visible: Vec<&crate::player::Player> = inst
@@ -771,13 +778,18 @@ impl MasterClient {
                                 let (display, user_id) = if let Some(arc) = client_arc {
                                     let c = arc.read();
                                     let disp = p.display.clone().unwrap_or_else(|| {
-                                        c.user.as_ref().map(|u| u.display_name.clone())
+                                        c.user
+                                            .as_ref()
+                                            .map(|u| u.display_name.clone())
                                             .unwrap_or_else(|| "Unknown".to_string())
                                     });
                                     let uid = c.user.as_ref().map(|u| u.to_identifier());
                                     (disp, uid)
                                 } else {
-                                    (p.display.clone().unwrap_or_else(|| "Unknown".to_string()), None)
+                                    (
+                                        p.display.clone().unwrap_or_else(|| "Unknown".to_string()),
+                                        None,
+                                    )
                                 };
                                 PlayerInfo {
                                     i: p.id,
@@ -804,12 +816,14 @@ impl MasterClient {
                 }
             }
             "ping" => {
-                if let Ok(_resp) = serde_json::from_value::<PingResponse>(envelope.payload.clone()) {
+                if let Ok(_resp) = serde_json::from_value::<PingResponse>(envelope.payload.clone())
+                {
                     // Silently handle ping response - latency could be calculated if needed
                 }
             }
             "command" => {
-                if let Ok(req) = serde_json::from_value::<CommandRequest>(envelope.payload.clone()) {
+                if let Ok(req) = serde_json::from_value::<CommandRequest>(envelope.payload.clone())
+                {
                     info!("[Command] $ {}", req.content);
                     self.handle_command(&req.content);
                 }

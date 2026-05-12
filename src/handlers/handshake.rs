@@ -47,19 +47,26 @@ pub fn handle(mut packet: Packet) {
     }
 
     // Notify the master server that a client has connected (platform/engine now known).
-    let address = state.clients.get(client_id)
+    let address = state
+        .clients
+        .get(client_id)
         .map(|arc| arc.read().address.clone())
         .unwrap_or_default();
-    let connected_at = state.clients.get(client_id)
+    let connected_at = state
+        .clients
+        .get(client_id)
         .map(|arc| arc.read().connected_at)
         .unwrap_or(0);
-    let _ = state.master.emit("client_connected", EventClientConnected {
-        id: client_id,
-        address,
-        platform: platform.clone(),
-        engine: engine.clone(),
-        connected_at,
-    });
+    let _ = state.master.emit(
+        "client_connected",
+        EventClientConnected {
+            id: client_id,
+            address,
+            platform: platform.clone(),
+            engine: engine.clone(),
+            connected_at,
+        },
+    );
 
     // Build response.
     let mut w = PacketWriter::new();
@@ -88,5 +95,9 @@ pub fn handle(mut packet: Packet) {
     w.write_u16(state.config.connection_timeout);
     w.write_u16(state.config.keep_alive_interval);
 
-    packet.reply_raw(encode_stream_packet(uid, PacketType::Handshake, w.finish().as_ref()));
+    packet.reply_raw(encode_stream_packet(
+        uid,
+        PacketType::Handshake,
+        w.finish().as_ref(),
+    ));
 }

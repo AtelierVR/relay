@@ -305,12 +305,12 @@ pub struct GetInstancesResp {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstanceInfo {
-    pub i: u32,             // internal ID (relay-local slot 0–254)
-    pub n: u32,             // node ID (master/DB ID)
-    pub f: u32,             // flags
-    pub p: u32,             // player count (all, including HIDE_IN_LIST)
-    pub w: String,          // world
-    pub c: u16,             // capacity
+    pub i: u32,    // internal ID (relay-local slot 0–254)
+    pub n: u32,    // node ID (master/DB ID)
+    pub f: u32,    // flags
+    pub p: u32,    // player count (all, including HIDE_IN_LIST)
+    pub w: String, // world
+    pub c: u16,    // capacity
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

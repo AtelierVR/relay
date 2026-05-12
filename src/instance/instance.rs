@@ -1,7 +1,9 @@
 use parking_lot::RwLock;
 use std::sync::Arc;
 
-use crate::constants::{DEFAULT_PROPERTY_RESEND_INTERVAL, DEFAULT_RENDER_ENTITY, DEFAULT_THRESHOLD, DEFAULT_TPS};
+use crate::constants::{
+    DEFAULT_PROPERTY_RESEND_INTERVAL, DEFAULT_RENDER_ENTITY, DEFAULT_THRESHOLD, DEFAULT_TPS,
+};
 use crate::player::Player;
 use crate::utils::hashing::verify_password;
 
@@ -320,7 +322,7 @@ impl Instance {
 
         // Calculate effective values
         let new_tps = ((self.tps as f32 * combined).max(config.min_tps as f32) as u8).min(self.tps);
-        
+
         // Make threshold more aggressive under high load
         let threshold_multiplier = if combined < 0.7 {
             // Under heavy load, increase threshold more aggressively
@@ -360,7 +362,8 @@ impl Instance {
                     .unwrap_or(0.50);
                 let tick_budget = 1000.0 / self.tps as f32;
                 let perf_factor = if self.last_tick_duration > tick_budget * config.perf_threshold {
-                    let factor = (tick_budget * config.perf_threshold / self.last_tick_duration).max(0.4);
+                    let factor =
+                        (tick_budget * config.perf_threshold / self.last_tick_duration).max(0.4);
                     if self.last_tick_duration > tick_budget * config.perf_threshold * 1.2 {
                         factor * 0.85
                     } else {

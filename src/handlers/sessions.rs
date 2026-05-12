@@ -4,7 +4,6 @@
 /// Response: [instances_on_page: u8][...instance_records][page: u8][total_pages: u8]
 ///
 /// Each instance record: [flags: u32][iid: u8][master_id: u32][player_count: u16][capacity: u16]
-
 use tracing::debug;
 
 use crate::{
@@ -32,7 +31,8 @@ pub async fn handle(mut packet: Packet) {
         hex_fmt::fmt_bytes(payload.as_ref(), 32)
     );
     // Must have at least handshaked.
-    let is_ok = packet.state
+    let is_ok = packet
+        .state
         .clients
         .get(client_id)
         .map(|a| a.read().is_handshaked())
@@ -85,5 +85,9 @@ pub async fn handle(mut packet: Packet) {
     w.write_u8(page);
     w.write_u8(total_pages);
 
-    packet.reply_raw(encode_stream_packet(uid, PacketType::Sessions, w.finish().as_ref()));
+    packet.reply_raw(encode_stream_packet(
+        uid,
+        PacketType::Sessions,
+        w.finish().as_ref(),
+    ));
 }

@@ -88,7 +88,14 @@ pub async fn handle(mut packet: Packet) {
 
     let action = match TravelingAction::from_u8(r.read_u8()) {
         Some(a) => a,
-        None => return packet.reply_raw(make_response(uid, iid, TravelingResults::Unknown, Some("Unknown action."))),
+        None => {
+            return packet.reply_raw(make_response(
+                uid,
+                iid,
+                TravelingResults::Unknown,
+                Some("Unknown action."),
+            ))
+        }
     };
 
     match action {
@@ -98,7 +105,12 @@ pub async fn handle(mut packet: Packet) {
     }
 }
 
-fn do_travel(packet: &mut Packet, iid: u8, player_id: u16, inst_arc: &crate::instance::ArcInstance) {
+fn do_travel(
+    packet: &mut Packet,
+    iid: u8,
+    player_id: u16,
+    inst_arc: &crate::instance::ArcInstance,
+) {
     let uid = packet.uid;
     let status = {
         let inst = inst_arc.read();
@@ -107,14 +119,24 @@ fn do_travel(packet: &mut Packet, iid: u8, player_id: u16, inst_arc: &crate::ins
             .unwrap_or(PlayerStatus::None)
     };
     if status == PlayerStatus::None {
-        return packet.reply_raw(make_response(uid, iid, TravelingResults::Unknown, Some("Player is not ready to travel.")));
+        return packet.reply_raw(make_response(
+            uid,
+            iid,
+            TravelingResults::Unknown,
+            Some("Player is not ready to travel."),
+        ));
     }
 
     let (master_id, address, version) = {
         let inst = inst_arc.read();
         let w = &inst.world;
         if w.master_id == 0 && w.address.is_empty() {
-            return packet.reply_raw(make_response(uid, iid, TravelingResults::Unknown, Some("World is not set for the instance.")));
+            return packet.reply_raw(make_response(
+                uid,
+                iid,
+                TravelingResults::Unknown,
+                Some("World is not set for the instance."),
+            ));
         }
         let address = if w.address == SAFE_LOCAL_ADDRESS {
             packet.state.config.node_address.clone()
@@ -131,7 +153,10 @@ fn do_travel(packet: &mut Packet, iid: u8, player_id: u16, inst_arc: &crate::ins
         }
     }
 
-    debug!("[Traveling] player {} traveling in instance {}", player_id, iid);
+    debug!(
+        "[Traveling] player {} traveling in instance {}",
+        player_id, iid
+    );
 
     let mut w = PacketWriter::new();
     w.write_u8(iid);
@@ -139,7 +164,11 @@ fn do_travel(packet: &mut Packet, iid: u8, player_id: u16, inst_arc: &crate::ins
     w.write_u32(master_id);
     w.write_string(&address);
     w.write_u16(version);
-    packet.reply_raw(encode_stream_packet(uid, PacketType::Traveling, w.finish().as_ref()));
+    packet.reply_raw(encode_stream_packet(
+        uid,
+        PacketType::Traveling,
+        w.finish().as_ref(),
+    ));
 }
 
 fn do_ready(packet: &mut Packet, iid: u8, player_id: u16, inst_arc: &crate::instance::ArcInstance) {
@@ -152,7 +181,12 @@ fn do_ready(packet: &mut Packet, iid: u8, player_id: u16, inst_arc: &crate::inst
     };
 
     if status != PlayerStatus::Traveling {
-        return packet.reply_raw(make_response(uid, iid, TravelingResults::Unknown, Some("Player is not traveling.")));
+        return packet.reply_raw(make_response(
+            uid,
+            iid,
+            TravelingResults::Unknown,
+            Some("Player is not traveling."),
+        ));
     }
 
     {
@@ -162,7 +196,10 @@ fn do_ready(packet: &mut Packet, iid: u8, player_id: u16, inst_arc: &crate::inst
         }
     }
 
-    debug!("[Traveling] player {} is now Ready in instance {}", player_id, iid);
+    debug!(
+        "[Traveling] player {} is now Ready in instance {}",
+        player_id, iid
+    );
 
     packet.reply_raw(make_response(uid, iid, TravelingResults::Ready, None));
 }

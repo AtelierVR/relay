@@ -7,11 +7,7 @@ use tracing::{debug, warn};
 
 use crate::{
     client::client::new_client,
-    handlers::{
-        context::AppState,
-        dispatcher::dispatch,
-        packet::Packet,
-    },
+    handlers::{context::AppState, dispatcher::dispatch, packet::Packet},
     master::messages::EventClientDisconnected,
     proto::{
         frame::{parse_datagram, read_framed, write_framed},
@@ -173,11 +169,14 @@ pub async fn handle_connection(state: Arc<AppState>, conn: Connection) -> Result
     // Clean up: leave all instances then remove the client.
     crate::handlers::quit::leave_all_instances(&state, client_id);
 
-    let _ = state.master.emit("client_disconnected", EventClientDisconnected {
-        id: client_id,
-        reason: "disconnected".to_string(),
-        kind:   "normal".to_string(),
-    });
+    let _ = state.master.emit(
+        "client_disconnected",
+        EventClientDisconnected {
+            id: client_id,
+            reason: "disconnected".to_string(),
+            kind: "normal".to_string(),
+        },
+    );
 
     state.clients.remove(client_id);
     debug!("[Connection] client {client_id} disconnected");

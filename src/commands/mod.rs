@@ -1,38 +1,34 @@
+use crate::{client::ClientManager, config::Config, instance::InstanceManager};
 use std::sync::Arc;
-use crate::{
-    client::ClientManager,
-    config::Config,
-    instance::InstanceManager,
-};
 
+mod clients;
 mod help;
-mod stop;
+mod instances;
+mod memory;
 mod restart;
 mod status;
-mod instances;
-mod clients;
+mod stop;
 mod uptime;
 mod version;
-mod memory;
 
+pub use clients::ClientsCommand;
 pub use help::HelpCommand;
-pub use stop::StopCommand;
+pub use instances::InstancesCommand;
+pub use memory::MemoryCommand;
 pub use restart::RestartCommand;
 pub use status::StatusCommand;
-pub use instances::InstancesCommand;
-pub use clients::ClientsCommand;
+pub use stop::StopCommand;
 pub use uptime::UptimeCommand;
 pub use version::VersionCommand;
-pub use memory::MemoryCommand;
 
 /// Command interface - each command implements this trait
 pub trait Command {
     /// Get the command name (e.g., "help", "status")
     fn name(&self) -> &str;
-    
+
     /// Get the command description
     fn description(&self) -> &str;
-    
+
     /// Execute the command with context and optional arguments (output via logging)
     fn execute(&self, context: &CommandContext, args: &[&str]);
 }
@@ -91,25 +87,26 @@ impl CommandRegistry {
             Box::new(VersionCommand),
             Box::new(MemoryCommand),
         ];
-        
+
         // Extract command metadata
-        let commands_info: Vec<CommandInfo> = commands.iter()
+        let commands_info: Vec<CommandInfo> = commands
+            .iter()
             .map(|cmd| CommandInfo {
                 name: cmd.name().to_string(),
                 description: cmd.description().to_string(),
             })
             .collect();
-        
+
         // Update context with commands info
         context.commands_info = commands_info;
         let ctx = Arc::new(context);
-        
+
         Self {
             context: ctx,
             commands,
         }
     }
-    
+
     /// Execute a command by name
     pub fn execute(&self, command: &str) {
         let parts: Vec<&str> = command.trim().split_whitespace().collect();
@@ -117,10 +114,10 @@ impl CommandRegistry {
             tracing::error!("Error: Empty command");
             return;
         }
-        
+
         let cmd_name = parts[0].to_lowercase();
         let args = &parts[1..];
-        
+
         // Find and execute the command
         for cmd in &self.commands {
             if cmd.name() == cmd_name {
@@ -128,7 +125,10 @@ impl CommandRegistry {
                 return;
             }
         }
-        
-        tracing::warn!("Unknown command: '{}'. Type 'help' for available commands.", cmd_name);
+
+        tracing::warn!(
+            "Unknown command: '{}'. Type 'help' for available commands.",
+            cmd_name
+        );
     }
 }

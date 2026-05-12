@@ -15,7 +15,8 @@ use crate::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
         packet_type::PacketType,
-    }, utils::hex_fmt,
+    },
+    utils::hex_fmt,
 };
 
 #[repr(u8)]
@@ -120,7 +121,11 @@ pub async fn handle(mut packet: Packet) {
     let mut w = PacketWriter::new();
     w.write_u8(iid);
     w.write_u8(AvatarChangedResult::Success as u8);
-    packet.reply_raw(encode_stream_packet(uid, PacketType::AvatarChanged, w.finish().as_ref()));
+    packet.reply_raw(encode_stream_packet(
+        uid,
+        PacketType::AvatarChanged,
+        w.finish().as_ref(),
+    ));
 }
 
 fn build_broadcast(iid: u8, player_id: u16, avatar: &Avatar) -> Bytes {
@@ -145,5 +150,9 @@ fn make_error(packet: &mut Packet, uid: u16, iid: u8, reason: &str) {
     w.write_u8(iid);
     w.write_u8(AvatarChangedResult::Failed as u8);
     w.write_string(reason);
-    packet.reply_raw(encode_stream_packet(uid, PacketType::AvatarChanged, w.finish().as_ref()));
+    packet.reply_raw(encode_stream_packet(
+        uid,
+        PacketType::AvatarChanged,
+        w.finish().as_ref(),
+    ));
 }

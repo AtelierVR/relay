@@ -19,7 +19,9 @@ pub fn build_status(
     config: &Arc<Config>,
 ) -> RelayStatus {
     let mut a = std::collections::HashMap::new();
-    let quic_address = config.use_address.as_ref()
+    let quic_address = config
+        .use_address
+        .as_ref()
         .map(|addr| addr.clone())
         .unwrap_or_else(|| format!("0.0.0.0:{}", config.port));
     a.insert("quic".to_string(), quic_address);

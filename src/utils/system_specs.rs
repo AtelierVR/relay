@@ -13,19 +13,19 @@ use sysinfo::System;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CpuSpecsData {
     pub u: f64,
-    pub c: u64
+    pub c: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemorySpecsData {
     pub u: u64,
-    pub t: u64
+    pub t: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkSpecsData {
     pub u: u64,
-    pub b: u64
+    pub b: u64,
 }
 
 /// System resource snapshot sent to the MasterServer.
@@ -349,21 +349,21 @@ pub fn get_specs() -> SpecsData {
     let (rate_tx, rate_rx, max_bw) = read_network_rates();
 
     SpecsData {
-        c: CpuSpecsData { 
-            u: used_cpu, 
-            c: core_number 
+        c: CpuSpecsData {
+            u: used_cpu,
+            c: core_number,
         },
         m: MemorySpecsData {
             u: memery_used,
-            t: memory_total
+            t: memory_total,
         },
-        u: NetworkSpecsData { 
-            u: rate_tx, 
-            b: max_bw
+        u: NetworkSpecsData {
+            u: rate_tx,
+            b: max_bw,
         },
-        d: NetworkSpecsData { 
-            u: rate_rx, 
-            b: max_bw
-        }
+        d: NetworkSpecsData {
+            u: rate_rx,
+            b: max_bw,
+        },
     }
 }

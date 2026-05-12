@@ -4,7 +4,6 @@
 /// [ClientLong: i64]        ← opaque long sent by the client
 /// ```
 /// Response: `[ClientTimestamp: i64][ServerTimestamp: i64][ClientLong: i64]`
-
 use crate::{
     handlers::packet::Packet,
     proto::{
@@ -41,5 +40,9 @@ pub fn handle(mut packet: Packet) {
     w.write_i64(client_ts); // echo client timestamp back
     w.write_i64(now_ms); // server timestamp
     w.write_i64(client_long); // echo client long back
-    packet.reply_raw(encode_stream_packet(uid, PacketType::Latency, w.finish().as_ref()));
+    packet.reply_raw(encode_stream_packet(
+        uid,
+        PacketType::Latency,
+        w.finish().as_ref(),
+    ));
 }

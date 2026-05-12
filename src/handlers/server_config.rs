@@ -69,7 +69,9 @@ pub async fn handle(mut packet: Packet) {
                 }
                 p.id
             }
-            None => return packet.reply_raw(make_failure(uid, iid, "You are not in this instance.")),
+            None => {
+                return packet.reply_raw(make_failure(uid, iid, "You are not in this instance."))
+            }
         }
     };
 
@@ -311,22 +313,18 @@ pub fn broadcast_config_change(
 
     let mut sent_count = 0;
     let mut failed_count = 0;
-    
+
     for (pid, cid) in &player_ids {
-        let resp = build_config_broadcast(
-            inst_arc,
-            iid,
-            flags,
-            *pid,
-            &state.config.load_balancing,
-        );
+        let resp = build_config_broadcast(inst_arc, iid, flags, *pid, &state.config.load_balancing);
         if let Some(arc) = state.clients.get(*cid) {
             let sent = arc.read().send_datagram(resp.clone());
             if sent {
                 sent_count += 1;
                 debug!(
                     "[ServerConfig] Sent broadcast datagram to client {} (player {}), {} bytes",
-                    cid, pid, resp.len()
+                    cid,
+                    pid,
+                    resp.len()
                 );
             } else {
                 failed_count += 1;
@@ -337,7 +335,7 @@ pub fn broadcast_config_change(
             }
         }
     }
-    
+
     debug!(
         "[ServerConfig] Broadcast complete: {} sent, {} failed",
         sent_count, failed_count

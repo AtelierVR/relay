@@ -19,7 +19,10 @@ impl PlayerTransforms {
         if reset {
             self.parts.insert(rig_id, (flags, transform));
         } else {
-            let entry = self.parts.entry(rig_id).or_insert((TransformFlags::NONE, Transform::default()));
+            let entry = self
+                .parts
+                .entry(rig_id)
+                .or_insert((TransformFlags::NONE, Transform::default()));
             entry.0 |= flags;
             entry.1 = transform;
         }

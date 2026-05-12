@@ -138,7 +138,7 @@ async fn main() -> Result<()> {
 /// Periodic task that updates load balancing and broadcasts changes
 async fn load_balancing_task(state: Arc<AppState>) {
     use crate::handlers::server_config::{broadcast_config_change, ServerConfigFlags};
-    
+
     loop {
         // Wait for the configured update interval
         let interval = state.config.load_balancing.update_interval as u64 * 1000;

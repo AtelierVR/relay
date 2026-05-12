@@ -2,9 +2,9 @@ use std::time::{Instant, SystemTime};
 
 use bytes::Bytes;
 use parking_lot::RwLock;
+use quinn::Connection;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use quinn::Connection;
 
 use super::user::User;
 use crate::constants::CLIENT_TX_BUFFER;
@@ -114,12 +114,8 @@ impl Client {
     /// Returns `true` on success.
     pub fn send(&self, payload: Bytes, ptype: PacketType, uid: u16, send_type: SendType) -> bool {
         match send_type {
-            SendType::Stream => {
-                self.try_push(encode_stream_packet(uid, ptype, payload.as_ref()))
-            }
-            SendType::Datagram => {
-                self.send_datagram(encode_datagram(uid, ptype, payload.as_ref()))
-            }
+            SendType::Stream => self.try_push(encode_stream_packet(uid, ptype, payload.as_ref())),
+            SendType::Datagram => self.send_datagram(encode_datagram(uid, ptype, payload.as_ref())),
         }
     }
 }

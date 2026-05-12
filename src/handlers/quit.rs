@@ -178,12 +178,15 @@ pub async fn handle(mut packet: Packet) {
     }
 
     // Notify node of player leaving.
-    let _ = state.master.emit("player_leave", EventPlayerLeave {
-        player_id: self_player_id,
-        internal_id: iid,
-        kind: quit_type.as_str().to_string(),
-        reason: reason.as_deref().unwrap_or_default().to_string(),
-    });
+    let _ = state.master.emit(
+        "player_leave",
+        EventPlayerLeave {
+            player_id: self_player_id,
+            internal_id: iid,
+            kind: quit_type.as_str().to_string(),
+            reason: reason.as_deref().unwrap_or_default().to_string(),
+        },
+    );
 
     packet.reply_raw(make_quit_response(uid, iid, quit_type, reason.as_deref()));
 }
@@ -246,12 +249,15 @@ pub fn leave_all_instances(state: &AppState, client_id: u16) {
         inst_arc.write().remove_player(player_id);
 
         // Notify node of player leaving (leave_all path, e.g. on disconnect).
-        let _ = state.master.emit("player_leave", EventPlayerLeave {
-            player_id: player_id,
-            internal_id: iid,
-            kind: "normal".to_string(),
-            reason: String::new(),
-        });
+        let _ = state.master.emit(
+            "player_leave",
+            EventPlayerLeave {
+                player_id: player_id,
+                internal_id: iid,
+                kind: "normal".to_string(),
+                reason: String::new(),
+            },
+        );
     }
 }
 

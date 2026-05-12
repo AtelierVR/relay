@@ -9,9 +9,9 @@ use tracing::{debug, warn};
 use crate::proto::packet_type::PacketType;
 
 use super::{
-    auth, avatar_changed, custom, disconnect, enter, event, handshake, latency, message, packet::Packet,
-    player_update, properties, quit, reliable, server_config, sessions, teleport, transform,
-    traveling, voice,
+    auth, avatar_changed, custom, disconnect, enter, event, handshake, latency, message,
+    packet::Packet, player_update, properties, quit, reliable, server_config, sessions, teleport,
+    transform, traveling, voice,
 };
 
 /// Packets that should not be logged (too frequent or low-value)
@@ -19,7 +19,7 @@ const SILENT_PACKETS: &[PacketType] = &[
     PacketType::Latency,
     PacketType::Transform,
     PacketType::Properties,
-    PacketType::Event
+    PacketType::Event,
 ];
 
 /// Dispatch any incoming packet — stream or datagram — to the matching handler.
@@ -41,27 +41,27 @@ pub async fn dispatch(packet: Packet) {
 
     match ptype {
         // ── Stream packets ────────────────────────────────────────────────
-        PacketType::Disconnect     => disconnect::handle(packet),
-        PacketType::Handshake      => handshake::handle(packet),
-        PacketType::Reliable       => reliable::handle(packet),
-        PacketType::Latency        => latency::handle(packet),
+        PacketType::Disconnect => disconnect::handle(packet),
+        PacketType::Handshake => handshake::handle(packet),
+        PacketType::Reliable => reliable::handle(packet),
+        PacketType::Latency => latency::handle(packet),
         PacketType::Authentication => auth::handle(packet).await,
-        PacketType::Enter          => enter::handle(packet).await,
-        PacketType::Quit           => quit::handle(packet).await,
-        PacketType::Custom         => custom::handle(packet).await,
-        PacketType::Traveling      => traveling::handle(packet).await,
-        PacketType::Teleport       => teleport::handle(packet).await,
-        PacketType::AvatarChanged  => avatar_changed::handle(packet).await,
-        PacketType::ServerConfig   => server_config::handle(packet).await,
-        PacketType::Properties     => properties::handle(packet).await,
-        PacketType::PlayerUpdate   => player_update::handle(packet).await,
-        PacketType::Sessions       => sessions::handle(packet).await,
-        PacketType::Event          => event::handle(packet).await,
-        PacketType::Message        => message::handle(packet).await,
+        PacketType::Enter => enter::handle(packet).await,
+        PacketType::Quit => quit::handle(packet).await,
+        PacketType::Custom => custom::handle(packet).await,
+        PacketType::Traveling => traveling::handle(packet).await,
+        PacketType::Teleport => teleport::handle(packet).await,
+        PacketType::AvatarChanged => avatar_changed::handle(packet).await,
+        PacketType::ServerConfig => server_config::handle(packet).await,
+        PacketType::Properties => properties::handle(packet).await,
+        PacketType::PlayerUpdate => player_update::handle(packet).await,
+        PacketType::Sessions => sessions::handle(packet).await,
+        PacketType::Event => event::handle(packet).await,
+        PacketType::Message => message::handle(packet).await,
 
         // ── Datagram packets ──────────────────────────────────────────────
         PacketType::Transform => transform::handle(packet).await,
-        PacketType::Voice     => voice::handle(packet).await,
+        PacketType::Voice => voice::handle(packet).await,
 
         // ── Deprecated / server-only — silently ignore ───────────────────
         PacketType::PasswordRequirement => {

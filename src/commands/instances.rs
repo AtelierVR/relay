@@ -6,11 +6,11 @@ impl Command for InstancesCommand {
     fn name(&self) -> &str {
         "instances"
     }
-    
+
     fn description(&self) -> &str {
         "List all running instances"
     }
-    
+
     fn execute(&self, context: &CommandContext, _args: &[&str]) {
         let count = context.instances.count();
         if count == 0 {

@@ -19,7 +19,10 @@ use crate::{
     handlers::{context::AppState, packet::Packet, transform::TransformType},
     instance::InstanceFlags,
     master::messages::EventPlayerJoin,
-    player::{Player, PlayerFlags, PlayerStatus, rig::{Transform, TransformFlags}},
+    player::{
+        rig::{Transform, TransformFlags},
+        Player, PlayerFlags, PlayerStatus,
+    },
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
@@ -87,17 +90,34 @@ pub async fn handle(mut packet: Packet) {
 
     let inst_arc = match state.instances.get(iid) {
         Some(a) => a,
-        None => return packet.reply_raw(make_error(uid, iid, EnterResult::NotFound, Some("Instance not found."))),
+        None => {
+            return packet.reply_raw(make_error(
+                uid,
+                iid,
+                EnterResult::NotFound,
+                Some("Instance not found."),
+            ))
+        }
     };
 
     // Check not already in instance.
     {
         let inst = inst_arc.read();
         if inst.get_players().iter().any(|p| p.client_id == client_id) {
-            return packet.reply_raw(make_error(uid, iid, EnterResult::Unknown, Some("Already in instance.")));
+            return packet.reply_raw(make_error(
+                uid,
+                iid,
+                EnterResult::Unknown,
+                Some("Already in instance."),
+            ));
         }
         if inst.is_full() {
-            return packet.reply_raw(make_error(uid, iid, EnterResult::Full, Some("Instance is full.")));
+            return packet.reply_raw(make_error(
+                uid,
+                iid,
+                EnterResult::Full,
+                Some("Instance is full."),
+            ));
         }
         // Moderation: blacklist check omitted for now (no user addresses in basic relay)
         if inst.flags.contains(InstanceFlags::USE_WHITELIST) {
@@ -180,19 +200,24 @@ pub async fn handle(mut packet: Packet) {
     {
         let display_name = if let Some(arc) = state.clients.get(client_id) {
             let c = arc.read();
-            c.user.as_ref().map(|u| u.display_name.clone())
+            c.user
+                .as_ref()
+                .map(|u| u.display_name.clone())
                 .unwrap_or_else(|| format!("Player {}", player_id))
         } else {
             format!("Player {}", player_id)
         };
-        let _ = state.master.emit("player_join", EventPlayerJoin {
-            client_id: client_id,
-            player_id: player_id,
-            display: display_name,
-            internal_id: iid,
-            flags: p_flags.bits(),
-            joined_at,
-        });
+        let _ = state.master.emit(
+            "player_join",
+            EventPlayerJoin {
+                client_id: client_id,
+                player_id: player_id,
+                display: display_name,
+                internal_id: iid,
+                flags: p_flags.bits(),
+                joined_at,
+            },
+        );
     }
 
     // Promote master if none exists yet.
@@ -274,7 +299,11 @@ fn build_enter_response(
     w.write_f32(threshold);
     w.write_f32(inst.render_entity);
     w.write_u8(inst.property_resend_interval);
-    packet.reply_raw(encode_stream_packet(uid, PacketType::Enter, w.finish().as_ref()));
+    packet.reply_raw(encode_stream_packet(
+        uid,
+        PacketType::Enter,
+        w.finish().as_ref(),
+    ));
 }
 
 /// Send a Join broadcast to all other players already in the instance.
@@ -392,18 +421,30 @@ fn broadcast_join(
                 .unwrap_or_default()
         };
         for (rig_id, tr_flags, tr) in transforms {
-            if tr_flags.is_empty() { continue; }
+            if tr_flags.is_empty() {
+                continue;
+            }
             let mut w = PacketWriter::new();
             w.write_u8(iid);
             w.write_u8(TransformType::EntityPart as u8);
             w.write_u16(other_pid);
             w.write_u16(rig_id);
             w.write_u8(tr_flags.bits());
-            if tr_flags.contains(TransformFlags::POSITION) { w.write_vec3(tr.position); }
-            if tr_flags.contains(TransformFlags::ROTATION) { w.write_quat(tr.rotation); }
-            if tr_flags.contains(TransformFlags::SCALE) { w.write_vec3(tr.scale); }
-            if tr_flags.contains(TransformFlags::VELOCITY) { w.write_vec3(tr.velocity); }
-            if tr_flags.contains(TransformFlags::ANG_VELOCITY) { w.write_vec3(tr.ang_velocity); }
+            if tr_flags.contains(TransformFlags::POSITION) {
+                w.write_vec3(tr.position);
+            }
+            if tr_flags.contains(TransformFlags::ROTATION) {
+                w.write_quat(tr.rotation);
+            }
+            if tr_flags.contains(TransformFlags::SCALE) {
+                w.write_vec3(tr.scale);
+            }
+            if tr_flags.contains(TransformFlags::VELOCITY) {
+                w.write_vec3(tr.velocity);
+            }
+            if tr_flags.contains(TransformFlags::ANG_VELOCITY) {
+                w.write_vec3(tr.ang_velocity);
+            }
             w.write_u16(other_pid); // broadcaster = player itself
             let pkt = encode_stream_packet(0, PacketType::Transform, w.finish().as_ref());
             if let Some(joining_arc) = state.clients.get(entering_client_id) {

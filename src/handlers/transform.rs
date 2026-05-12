@@ -20,7 +20,7 @@ use crate::{
         buffer::{PacketReader, PacketWriter},
         header::encode_datagram,
         packet_type::PacketType,
-    }
+    },
 };
 
 #[repr(u8)]
@@ -283,7 +283,11 @@ fn write_transform_fields(w: &mut PacketWriter, flags: TransformFlags, tr: &Tran
     }
 }
 
-fn send_datagram_broadcast(state: &crate::handlers::context::AppState, recipients: &[u16], packet: Bytes) {
+fn send_datagram_broadcast(
+    state: &crate::handlers::context::AppState,
+    recipients: &[u16],
+    packet: Bytes,
+) {
     for cid in recipients {
         if let Some(arc) = state.clients.get(*cid) {
             arc.read().send_datagram(packet.clone());
