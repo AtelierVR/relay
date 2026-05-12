@@ -4,18 +4,19 @@
 /// ```
 /// Guard: must be handshaked.
 /// Leaves all instances and closes the connection gracefully.
+use std::sync::Arc;
+
+use bytes::Bytes;
 use tracing::{debug, info};
 
 use crate::{
-    handlers::{packet::Packet, quit::leave_all_instances},
+    handlers::{context::AppState, quit::leave_all_instances},
     proto::buffer::PacketReader,
     utils::hex_fmt,
 };
 
-pub fn handle(packet: Packet) {
-    let state = &packet.state;
-    let client_id = packet.client_id();
-    let payload = packet.payload.clone();
+pub fn handle(state: &Arc<AppState>, client_id: u16, _iid: u8, payload: Bytes) -> Bytes {
+    let payload = payload;
 
     debug!(
         "[Disconnect] client {}: raw payload: {}",
@@ -66,4 +67,5 @@ pub fn handle(packet: Packet) {
 
     // Leave all instances (broadcasts Leave to remaining ready players).
     leave_all_instances(state, client_id);
+    Bytes::new()
 }
