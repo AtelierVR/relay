@@ -17,6 +17,7 @@ use tracing::{debug, info, warn};
 use crate::{
     client::{client::AuthState, user::User},
     handlers::packet::Packet,
+    master::messages::EventClientAuthentified,
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
@@ -193,6 +194,11 @@ async fn on_resolve_challenge(packet: &mut Packet, mut r: PacketReader) {
                     "[Auth] client {} authenticated: user={}@{} display={}",
                     client_id, user.id, user.address, user.display_name
                 );
+                let user_identifier = format!("{}@{}", user.id, user.address);
+                let _ = packet.state.master.emit("client_authentified", EventClientAuthentified {
+                    id: client_id,
+                    user: user_identifier,
+                });
                 let mut w = PacketWriter::new();
                 w.write_u8(AuthResult::Success as u8);
                 w.write_u32(user.id);

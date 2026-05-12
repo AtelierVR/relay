@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 use bytes::Bytes;
 use parking_lot::RwLock;
@@ -48,6 +48,8 @@ pub struct Client {
     pub engine: String,
     /// Time of the last received packet.
     pub last_seen: Instant,
+    /// Unix millisecond timestamp when the client connected.
+    pub connected_at: i64,
     /// Authenticated user, if auth succeeded.
     pub user: Option<User>,
     /// Random challenge bytes sent for RSA challenge-response.
@@ -62,12 +64,17 @@ pub struct Client {
 
 impl Client {
     pub fn new(id: u16, tx: mpsc::Sender<Bytes>, conn: Arc<Connection>) -> Self {
+        let now_ms = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as i64;
         Self {
             id,
             address: String::new(),
             platform: String::new(),
             engine: String::new(),
             last_seen: Instant::now(),
+            connected_at: now_ms,
             user: None,
             challenge: Vec::new(),
             auth_state: AuthState::None,

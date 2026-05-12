@@ -150,45 +150,65 @@ pub struct RelayConnected {
 
 // ─── relay events ───────────────────────────────────────────────────────────
 
-/// Emitted to the node when a QUIC client connects to the relay.
+/// Emitted to the node when a QUIC client completes handshake (platform/engine are known).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventClientConnected {
     /// Relay-assigned client ID.
-    pub id: String,
+    pub id: u16,
     /// Remote IP:port.
     pub address: String,
+    /// Client platform (e.g. "windows", "android").
+    pub platform: String,
+    /// Client engine identifier (e.g. "unity").
+    pub engine: String,
+    /// Unix millisecond timestamp when the client connected.
+    pub connected_at: i64,
+}
+
+/// Emitted to the node when a client authenticates successfully.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventClientAuthentified {
+    /// Relay-assigned client ID.
+    pub id: u16,
+    /// NoxIdentifier of the authenticated user (e.g. "1@hactazia.fr").
+    pub user: String,
 }
 
 /// Emitted to the node when a QUIC client disconnects.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventClientDisconnected {
     /// Relay-assigned client ID.
-    pub id: String,
-    /// Remote IP:port.
-    pub address: String,
-    /// User identifier at time of disconnect, if authenticated.
-    pub user: Option<String>,
+    pub id: u16,
+    /// Disconnect reason string (e.g. "normal", "timeout", "kicked").
+    pub reason: String,
+    /// Disconnect type category.
+    #[serde(rename = "type")]
+    pub kind: String,
 }
 
 /// Emitted to the node when a player joins an instance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventPlayerJoin {
-    pub client_id: String,
-    pub player_id: String,
-    pub instance_id: String,
-    /// User identifier, if authenticated.
-    pub user: Option<String>,
+    pub client_id: u16,
+    pub player_id: u16,
     pub display: String,
+    /// Relay-internal instance slot (0–254).
+    pub internal_id: u8,
+    pub flags: u32,
+    /// Unix millisecond timestamp when the player joined.
+    pub joined_at: i64,
 }
 
 /// Emitted to the node when a player leaves an instance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventPlayerLeave {
-    pub client_id: String,
-    pub player_id: String,
-    pub instance_id: String,
-    /// User identifier, if known.
-    pub user: Option<String>,
+    pub player_id: u16,
+    /// Relay-internal instance slot (0–254).
+    pub internal_id: u8,
+    /// Quit type ("normal", "timeout", "moderation_kick", "vote_kick", "configuration_error", "unknown_error").
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub reason: String,
 }
 
 // ─── drop_instance ───────────────────────────────────────────────────────────
@@ -244,11 +264,12 @@ pub struct GetClientsResp {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientInfo {
-    pub i: String,         // client ID
+    pub i: u16,            // client ID
     pub a: String,         // address
     pub p: String,         // platform
     pub e: String,         // engine
     pub u: Option<String>, // user identifier (optional)
+    pub t: i64,            // connected_at (Unix ms)
 }
 
 // ─── ping ────────────────────────────────────────────────────────────────────
@@ -294,11 +315,12 @@ pub struct InstanceInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerInfo {
-    pub i: String,         // player ID
-    pub c: String,         // client ID
+    pub i: u16,            // player ID
+    pub c: u16,            // client ID
     pub d: String,         // display name
     pub f: u32,            // flags
     pub u: Option<String>, // user identifier (e.g. "1@hactazia.fr"), None if unauthenticated
+    pub j: i64,            // joined_at (Unix ms)
 }
 
 // ─── get_players ──────────────────────────────────────────────────────────────

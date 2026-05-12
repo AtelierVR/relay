@@ -4,6 +4,7 @@ use crate::{
     client::client::AuthState,
     constants::PROTOCOL_VERSION,
     handlers::packet::Packet,
+    master::messages::EventClientConnected,
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
@@ -40,10 +41,25 @@ pub fn handle(mut packet: Packet) {
     // Update client state.
     if let Some(arc) = state.clients.get(client_id) {
         let mut c = arc.write();
-        c.engine = engine;
-        c.platform = platform;
+        c.engine = engine.clone();
+        c.platform = platform.clone();
         c.auth_state = AuthState::Handshaked;
     }
+
+    // Notify the master server that a client has connected (platform/engine now known).
+    let address = state.clients.get(client_id)
+        .map(|arc| arc.read().address.clone())
+        .unwrap_or_default();
+    let connected_at = state.clients.get(client_id)
+        .map(|arc| arc.read().connected_at)
+        .unwrap_or(0);
+    let _ = state.master.emit("client_connected", EventClientConnected {
+        id: client_id,
+        address,
+        platform: platform.clone(),
+        engine: engine.clone(),
+        connected_at,
+    });
 
     // Build response.
     let mut w = PacketWriter::new();
