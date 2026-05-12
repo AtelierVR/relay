@@ -5,8 +5,7 @@
 /// Broadcast to others: [iid: u8][AvatarChangedResult::Changing][player_id: u16]
 ///                      [avatar_id: u32][server: string][version: u16]
 use bytes::Bytes;
-use tracing::{debug, warn};
-use tracing_subscriber::field::debug;
+use tracing::warn;
 
 use crate::{
     avatar::Avatar,
@@ -16,7 +15,6 @@ use crate::{
         header::encode_stream_packet,
         packet_type::PacketType,
     },
-    utils::hex_fmt,
 };
 
 #[repr(u8)]

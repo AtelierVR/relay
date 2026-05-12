@@ -109,7 +109,7 @@ impl CommandRegistry {
 
     /// Execute a command by name
     pub fn execute(&self, command: &str) {
-        let parts: Vec<&str> = command.trim().split_whitespace().collect();
+        let parts: Vec<&str> = command.split_whitespace().collect();
         if parts.is_empty() {
             tracing::error!("Error: Empty command");
             return;

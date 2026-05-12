@@ -252,7 +252,7 @@ pub fn leave_all_instances(state: &AppState, client_id: u16) {
         let _ = state.master.emit(
             "player_leave",
             EventPlayerLeave {
-                player_id: player_id,
+                player_id,
                 internal_id: iid,
                 kind: "normal".to_string(),
                 reason: String::new(),

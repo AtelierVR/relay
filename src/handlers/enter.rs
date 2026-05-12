@@ -210,8 +210,8 @@ pub async fn handle(mut packet: Packet) {
         let _ = state.master.emit(
             "player_join",
             EventPlayerJoin {
-                client_id: client_id,
-                player_id: player_id,
+                client_id,
+                player_id,
                 display: display_name,
                 internal_id: iid,
                 flags: p_flags.bits(),
