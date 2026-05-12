@@ -41,7 +41,7 @@ pub async fn dispatch(packet: Packet) {
 
     match ptype {
         // ── Stream packets ────────────────────────────────────────────────
-        PacketType::Disconnect => { disconnect::handle(&packet.state, packet.client_id(), 0, packet.payload.clone()); }
+        PacketType::Disconnect => disconnect::handle(packet),
         PacketType::Handshake => handshake::handle(packet),
         PacketType::Reliable => reliable::handle(packet),
         PacketType::Latency => latency::handle(packet),

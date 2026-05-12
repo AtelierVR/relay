@@ -10,12 +10,16 @@ use bytes::Bytes;
 use tracing::{debug, info};
 
 use crate::{
-    handlers::{context::AppState, quit::leave_all_instances},
+    handlers::{context::AppState, packet::Packet, quit::leave_all_instances},
     proto::buffer::PacketReader,
     utils::hex_fmt,
 };
 
-pub fn handle(state: &Arc<AppState>, client_id: u16, _iid: u8, payload: Bytes) -> Bytes {
+pub fn handle(packet: Packet) {
+    handle_inner(&packet.state, packet.client_id(), packet.payload.clone());
+}
+
+pub fn handle_inner(state: &Arc<AppState>, client_id: u16, payload: Bytes) -> Bytes {
     let payload = payload;
 
     debug!(
@@ -30,7 +34,7 @@ pub fn handle(state: &Arc<AppState>, client_id: u16, _iid: u8, payload: Bytes) -
         .map(|a| a.read().is_handshaked())
         .unwrap_or(false);
     if !is_handshaked {
-        return;
+        return Bytes::new();
     }
 
     // Optional reason string (Remaining() > 2 in C# = at least u16 length prefix + 1 byte).

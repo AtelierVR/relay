@@ -8,7 +8,7 @@
 use bytes::Bytes;
 
 use crate::{
-    handlers::disconnect,
+    handlers::disconnect::{self, handle_inner},
     instance::Instance,
     player::{Player, PlayerStatus},
     proto::buffer::PacketWriter,
@@ -31,7 +31,7 @@ fn non_handshaked_client_rejected() {
     let state = make_state();
     let _rx = register_client(&state, 1);
     // auth_state is still None → must be rejected
-    let resp = disconnect::handle(&state, 1, 0, Bytes::new());
+    let resp = handle_inner(&state, 1, Bytes::new());
     assert!(resp.is_empty(), "non-handshaked client must be rejected");
 }
 
@@ -39,7 +39,7 @@ fn non_handshaked_client_rejected() {
 fn unknown_client_no_panic() {
     let state = make_state();
     // client 99 was never registered
-    let resp = disconnect::handle(&state, 99, 0, Bytes::new());
+    let resp = handle_inner(&state, 99, Bytes::new());
     assert!(resp.is_empty());
 }
 
@@ -50,7 +50,7 @@ fn always_returns_empty_bytes() {
     let state = make_state();
     let _rx = register_client(&state, 1);
     set_handshaked(&state, 1);
-    let resp = disconnect::handle(&state, 1, 0, Bytes::new());
+    let resp = handle_inner(&state, 1, Bytes::new());
     assert!(
         resp.is_empty(),
         "disconnect handler must not return a packet"
@@ -62,7 +62,7 @@ fn returns_empty_even_with_reason() {
     let state = make_state();
     let _rx = register_client(&state, 1);
     set_handshaked(&state, 1);
-    let resp = disconnect::handle(&state, 1, 0, reason_payload("test reason"));
+    let resp = handle_inner(&state, 1, reason_payload("test reason"));
     assert!(
         resp.is_empty(),
         "disconnect handler must not return a packet even when reason is present"
@@ -77,7 +77,7 @@ fn empty_payload_does_not_panic() {
     let _rx = register_client(&state, 1);
     set_handshaked(&state, 1);
     // empty payload → no reason read, should not panic
-    disconnect::handle(&state, 1, 0, Bytes::new());
+    handle_inner(&state, 1, Bytes::new());
 }
 
 #[test]
@@ -86,7 +86,7 @@ fn short_payload_does_not_panic() {
     let _rx = register_client(&state, 1);
     set_handshaked(&state, 1);
     // 1 byte payload → Remaining() == 1 ≤ 2 → skip reason read, should not panic
-    disconnect::handle(&state, 1, 0, Bytes::from_static(b"\x01"));
+    handle_inner(&state, 1, Bytes::from_static(b"\x01"));
 }
 
 #[test]
@@ -95,7 +95,7 @@ fn two_byte_payload_does_not_panic() {
     let _rx = register_client(&state, 1);
     set_handshaked(&state, 1);
     // Exactly 2 bytes → Remaining() == 2, NOT > 2 → skip reason read
-    disconnect::handle(&state, 1, 0, Bytes::from_static(b"\x00\x00"));
+    handle_inner(&state, 1, Bytes::from_static(b"\x00\x00"));
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn reason_string_payload_does_not_panic() {
     let state = make_state();
     let _rx = register_client(&state, 1);
     set_handshaked(&state, 1);
-    disconnect::handle(&state, 1, 0, reason_payload("leaving due to AFK"));
+    handle_inner(&state, 1, reason_payload("leaving due to AFK"));
 }
 
 // ─── Instance leave tests ─────────────────────────────────────────────────────
@@ -130,7 +130,7 @@ fn player_removed_from_instance_after_disconnect() {
         "setup: player should be in instance"
     );
 
-    disconnect::handle(&state, 1, 0, Bytes::new());
+    handle_inner(&state, 1, Bytes::new());
 
     assert_eq!(
         arc_inst.read().get_players().len(),
@@ -164,7 +164,7 @@ fn player_removed_from_all_instances_after_disconnect() {
         w.add_player(p);
     }
 
-    disconnect::handle(&state, 5, 0, Bytes::new());
+    handle_inner(&state, 5, Bytes::new());
 
     assert_eq!(
         arc_a.read().get_players().len(),
@@ -204,7 +204,7 @@ fn other_players_receive_leave_broadcast() {
         w.add_player(observer);
     }
 
-    disconnect::handle(&state, 1, 0, Bytes::new());
+    handle_inner(&state, 1, Bytes::new());
 
     // Observer should have received a Leave broadcast.
     match rx_observer.try_recv() {
@@ -241,7 +241,7 @@ fn disconnect_does_not_affect_other_clients() {
         w.add_player(p);
     }
 
-    disconnect::handle(&state, 1, 0, Bytes::new());
+    handle_inner(&state, 1, Bytes::new());
 
     // Instance B's player must be untouched.
     assert_eq!(
