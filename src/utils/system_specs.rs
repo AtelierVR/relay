@@ -294,7 +294,8 @@ fn get_max_network_bandwidth() -> u64 {
 
 /// Returns (tx_rate_bytes_per_sec, rx_rate_bytes_per_sec, tx_packets_per_sec, rx_packets_per_sec, max_bandwidth_bytes_per_sec).
 fn read_network_rates() -> (u64, u64, u64, u64, u64) {
-    let (total_tx, total_rx, total_tx_pkt, total_rx_pkt) = read_proc_net_dev().unwrap_or((0, 0, 0, 0));
+    let (total_tx, total_rx, total_tx_pkt, total_rx_pkt) =
+        read_proc_net_dev().unwrap_or((0, 0, 0, 0));
     let mut net = net_state().lock();
     let now = Instant::now();
 
@@ -303,8 +304,10 @@ fn read_network_rates() -> (u64, u64, u64, u64, u64) {
         if elapsed >= 1.0 {
             let tx = ((total_tx.saturating_sub(net.last_tx)) as f64 / elapsed) as u64;
             let rx = ((total_rx.saturating_sub(net.last_rx)) as f64 / elapsed) as u64;
-            let tx_pkt = ((total_tx_pkt.saturating_sub(net.last_tx_packets)) as f64 / elapsed) as u64;
-            let rx_pkt = ((total_rx_pkt.saturating_sub(net.last_rx_packets)) as f64 / elapsed) as u64;
+            let tx_pkt =
+                ((total_tx_pkt.saturating_sub(net.last_tx_packets)) as f64 / elapsed) as u64;
+            let rx_pkt =
+                ((total_rx_pkt.saturating_sub(net.last_rx_packets)) as f64 / elapsed) as u64;
             net.rate_tx = tx;
             net.rate_rx = rx;
             net.rate_tx_packets = tx_pkt;
@@ -316,7 +319,12 @@ fn read_network_rates() -> (u64, u64, u64, u64, u64) {
             net.last_time = Some(now);
             (tx, rx, tx_pkt, rx_pkt)
         } else {
-            (net.rate_tx, net.rate_rx, net.rate_tx_packets, net.rate_rx_packets)
+            (
+                net.rate_tx,
+                net.rate_rx,
+                net.rate_tx_packets,
+                net.rate_rx_packets,
+            )
         }
     } else {
         net.last_tx = total_tx;
@@ -327,7 +335,13 @@ fn read_network_rates() -> (u64, u64, u64, u64, u64) {
         (0, 0, 0, 0)
     };
 
-    (rate_tx, rate_rx, rate_tx_pkt, rate_rx_pkt, get_max_network_bandwidth())
+    (
+        rate_tx,
+        rate_rx,
+        rate_tx_pkt,
+        rate_rx_pkt,
+        get_max_network_bandwidth(),
+    )
 }
 
 // ── Storage ───────────────────────────────────────────────────────────────────
