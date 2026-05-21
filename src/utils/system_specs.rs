@@ -26,6 +26,7 @@ pub struct MemorySpecsData {
 pub struct NetworkSpecsData {
     pub u: u64,
     pub b: u64,
+    pub p: u64,
 }
 
 /// System resource snapshot sent to the MasterServer.
@@ -73,9 +74,13 @@ fn process_cpu_state() -> &'static Mutex<ProcessCpuState> {
 struct NetState {
     last_tx: u64,
     last_rx: u64,
+    last_tx_packets: u64,
+    last_rx_packets: u64,
     last_time: Option<Instant>,
     rate_tx: u64,
     rate_rx: u64,
+    rate_tx_packets: u64,
+    rate_rx_packets: u64,
 }
 
 fn net_state() -> &'static Mutex<NetState> {
@@ -84,9 +89,13 @@ fn net_state() -> &'static Mutex<NetState> {
         Mutex::new(NetState {
             last_tx: 0,
             last_rx: 0,
+            last_tx_packets: 0,
+            last_rx_packets: 0,
             last_time: None,
             rate_tx: 0,
             rate_rx: 0,
+            rate_tx_packets: 0,
+            rate_rx_packets: 0,
         })
     })
 }
@@ -227,12 +236,14 @@ fn read_total_memory_linux() -> u64 {
 
 // ── Network ───────────────────────────────────────────────────────────────────
 
-fn read_proc_net_dev() -> Option<(u64, u64)> {
+fn read_proc_net_dev() -> Option<(u64, u64, u64, u64)> {
     #[cfg(target_os = "linux")]
     {
         let content = fs::read_to_string("/proc/net/dev").ok()?;
         let mut tx_total = 0u64;
         let mut rx_total = 0u64;
+        let mut tx_packets = 0u64;
+        let mut rx_packets = 0u64;
         for line in content.lines().skip(2) {
             let line = line.trim();
             if line.starts_with("lo:") {
@@ -245,9 +256,11 @@ fn read_proc_net_dev() -> Option<(u64, u64)> {
                 continue;
             }
             rx_total += parts[0].parse::<u64>().unwrap_or(0);
+            rx_packets += parts[1].parse::<u64>().unwrap_or(0);
             tx_total += parts[8].parse::<u64>().unwrap_or(0);
+            tx_packets += parts[9].parse::<u64>().unwrap_or(0);
         }
-        return Some((tx_total, rx_total));
+        return Some((tx_total, rx_total, tx_packets, rx_packets));
     }
     #[allow(unreachable_code)]
     None
@@ -279,34 +292,42 @@ fn get_max_network_bandwidth() -> u64 {
     125_000_000 // Fallback: 1 Gbps in bytes/s
 }
 
-/// Returns (tx_rate_bytes_per_sec, rx_rate_bytes_per_sec, max_bandwidth_bytes_per_sec).
-fn read_network_rates() -> (u64, u64, u64) {
-    let (total_tx, total_rx) = read_proc_net_dev().unwrap_or((0, 0));
+/// Returns (tx_rate_bytes_per_sec, rx_rate_bytes_per_sec, tx_packets_per_sec, rx_packets_per_sec, max_bandwidth_bytes_per_sec).
+fn read_network_rates() -> (u64, u64, u64, u64, u64) {
+    let (total_tx, total_rx, total_tx_pkt, total_rx_pkt) = read_proc_net_dev().unwrap_or((0, 0, 0, 0));
     let mut net = net_state().lock();
     let now = Instant::now();
 
-    let (rate_tx, rate_rx) = if let Some(last_time) = net.last_time {
+    let (rate_tx, rate_rx, rate_tx_pkt, rate_rx_pkt) = if let Some(last_time) = net.last_time {
         let elapsed = now.duration_since(last_time).as_secs_f64();
         if elapsed >= 1.0 {
             let tx = ((total_tx.saturating_sub(net.last_tx)) as f64 / elapsed) as u64;
             let rx = ((total_rx.saturating_sub(net.last_rx)) as f64 / elapsed) as u64;
+            let tx_pkt = ((total_tx_pkt.saturating_sub(net.last_tx_packets)) as f64 / elapsed) as u64;
+            let rx_pkt = ((total_rx_pkt.saturating_sub(net.last_rx_packets)) as f64 / elapsed) as u64;
             net.rate_tx = tx;
             net.rate_rx = rx;
+            net.rate_tx_packets = tx_pkt;
+            net.rate_rx_packets = rx_pkt;
             net.last_tx = total_tx;
             net.last_rx = total_rx;
+            net.last_tx_packets = total_tx_pkt;
+            net.last_rx_packets = total_rx_pkt;
             net.last_time = Some(now);
-            (tx, rx)
+            (tx, rx, tx_pkt, rx_pkt)
         } else {
-            (net.rate_tx, net.rate_rx)
+            (net.rate_tx, net.rate_rx, net.rate_tx_packets, net.rate_rx_packets)
         }
     } else {
         net.last_tx = total_tx;
         net.last_rx = total_rx;
+        net.last_tx_packets = total_tx_pkt;
+        net.last_rx_packets = total_rx_pkt;
         net.last_time = Some(now);
-        (0, 0)
+        (0, 0, 0, 0)
     };
 
-    (rate_tx, rate_rx, get_max_network_bandwidth())
+    (rate_tx, rate_rx, rate_tx_pkt, rate_rx_pkt, get_max_network_bandwidth())
 }
 
 // ── Storage ───────────────────────────────────────────────────────────────────
@@ -346,7 +367,7 @@ fn read_storage() -> [u64; 2] {
 pub fn get_specs() -> SpecsData {
     let (used_cpu, core_number) = read_process_cpu();
     let (memery_used, memory_total) = read_memory();
-    let (rate_tx, rate_rx, max_bw) = read_network_rates();
+    let (rate_tx, rate_rx, rate_tx_pkt, rate_rx_pkt, max_bw) = read_network_rates();
 
     SpecsData {
         c: CpuSpecsData {
@@ -360,10 +381,12 @@ pub fn get_specs() -> SpecsData {
         u: NetworkSpecsData {
             u: rate_tx,
             b: max_bw,
+            p: rate_tx_pkt,
         },
         d: NetworkSpecsData {
             u: rate_rx,
             b: max_bw,
+            p: rate_rx_pkt,
         },
     }
 }
