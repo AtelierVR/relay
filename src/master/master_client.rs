@@ -330,6 +330,16 @@ impl MasterClient {
 
                 // Create instances locally
                 for spec in instances {
+                    // Skip if we already have a slot for this DB instance (avoids duplicates
+                    // across reconnections when the node returns the same instance again).
+                    if self.instances.has_master_id(spec.id) {
+                        debug!(
+                            "[MasterClient] Instance #{} already exists, skipping",
+                            spec.id
+                        );
+                        continue;
+                    }
+
                     let internal_id = self.instances.next_internal_id();
                     if internal_id == u8::MAX {
                         warn!(
@@ -582,6 +592,8 @@ impl MasterClient {
 
     /// Process one inbound WS text message.
     async fn handle_inbound(&self, text: &str) {
+        use crate::instance::{Instance, InstanceFlags, World};
+        use super::messages::InstanceSpec;
         let Ok(envelope) = serde_json::from_str::<WsMessage<Value>>(text) else {
             warn!("[MasterClient] Failed to parse inbound: {text}");
             return;
@@ -603,6 +615,45 @@ impl MasterClient {
                         "[MasterClient] relay_connected id={} master_address={}",
                         rc.id, rc.master_address
                     );
+                }
+            }
+            "new_instance" => {
+                if let Ok(spec) = serde_json::from_value::<InstanceSpec>(envelope.payload) {
+                    let current = self.instances.count();
+                    let max = self.config.max_instances as usize;
+                    if current >= max {
+                        warn!(
+                            "[MasterClient] new_instance: at capacity ({}/{}), ignoring",
+                            current, max
+                        );
+                        return;
+                    }
+                    let internal_id = self.instances.next_internal_id();
+                    if internal_id == u8::MAX {
+                        warn!("[MasterClient] new_instance: no available internal IDs");
+                        return;
+                    }
+                    let mut instance = Instance::new(internal_id, spec.id);
+                    instance.capacity = spec.capacity;
+                    instance.property_resend_interval = self.config.property_resend_interval;
+                    if self.config.debug {
+                        instance.flags.insert(InstanceFlags::AUTHORIZE_BOT);
+                    }
+                    if let Some(pwd) = spec.password {
+                        instance.set_password(Some(pwd));
+                    }
+                    if let Some(world_spec) = spec.world {
+                        instance.world =
+                            World::new(world_spec.id, world_spec.address, world_spec.version);
+                    }
+                    self.instances.add(instance);
+                    info!(
+                        "[MasterClient] new_instance: created instance #{} (internal {})",
+                        spec.id, internal_id
+                    );
+                    if let Err(e) = self.sync_instances_with_master().await {
+                        warn!("[MasterClient] new_instance: sync failed: {}", e);
+                    }
                 }
             }
             "drop_instance" => {

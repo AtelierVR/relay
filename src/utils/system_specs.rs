@@ -41,6 +41,8 @@ pub struct SpecsData {
     pub u: NetworkSpecsData,
     /// Download bandwidth: [bytes_per_sec, max_bytes_per_sec].
     pub d: NetworkSpecsData,
+    /// Effective MTU: minimum payload size across QUIC, UDP, and TCP protocols.
+    pub mtu: u64,
 }
 
 // ── Process CPU tracking ──────────────────────────────────────────────────────
@@ -266,6 +268,46 @@ fn read_proc_net_dev() -> Option<(u64, u64, u64, u64)> {
     None
 }
 
+/// Read the minimum MTU from all non-loopback network interfaces.
+fn get_interface_mtu() -> u64 {
+    #[cfg(target_os = "linux")]
+    if let Ok(entries) = fs::read_dir("/sys/class/net") {
+        let mut min_mtu: u64 = u64::MAX;
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let iface = name.to_string_lossy();
+            if iface == "lo" {
+                continue;
+            }
+            let mtu_path = format!("/sys/class/net/{}/mtu", iface);
+            if let Ok(content) = fs::read_to_string(&mtu_path) {
+                if let Ok(mtu) = content.trim().parse::<u64>() {
+                    if mtu > 0 {
+                        min_mtu = min_mtu.min(mtu);
+                    }
+                }
+            }
+        }
+        if min_mtu < u64::MAX {
+            return min_mtu;
+        }
+    }
+    1500 // Standard Ethernet MTU fallback
+}
+
+/// Compute effective MTU as the minimum payload across QUIC, UDP, and TCP.
+///
+/// - QUIC overhead: 20 (IP) + 8 (UDP) + 20 (QUIC headers) = 48 bytes
+/// - UDP  overhead: 20 (IP) + 8 (UDP)                      = 28 bytes
+/// - TCP  overhead: 20 (IP) + 20 (TCP min headers)         = 40 bytes
+pub fn get_effective_mtu() -> u64 {
+    let iface_mtu = get_interface_mtu();
+    let quic_mtu = iface_mtu.saturating_sub(48);
+    let udp_mtu = iface_mtu.saturating_sub(28);
+    let tcp_mtu = iface_mtu.saturating_sub(40);
+    quic_mtu.min(udp_mtu).min(tcp_mtu)
+}
+
 fn get_max_network_bandwidth() -> u64 {
     #[cfg(target_os = "linux")]
     if let Ok(entries) = fs::read_dir("/sys/class/net") {
@@ -382,6 +424,7 @@ pub fn get_specs() -> SpecsData {
     let (used_cpu, core_number) = read_process_cpu();
     let (memery_used, memory_total) = read_memory();
     let (rate_tx, rate_rx, rate_tx_pkt, rate_rx_pkt, max_bw) = read_network_rates();
+    let mtu = get_effective_mtu();
 
     SpecsData {
         c: CpuSpecsData {
@@ -402,5 +445,6 @@ pub fn get_specs() -> SpecsData {
             b: max_bw,
             p: rate_rx_pkt,
         },
+        mtu,
     }
 }

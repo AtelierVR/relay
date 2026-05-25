@@ -51,6 +51,13 @@ impl InstanceManager {
             .collect()
     }
 
+    /// Returns true if any instance already has the given master (DB) id.
+    pub fn has_master_id(&self, master_id: u32) -> bool {
+        self.instances
+            .iter()
+            .any(|e| e.value().read().master_id == master_id)
+    }
+
     /// Find the lowest u8 internal ID not currently in use.
     pub fn next_internal_id(&self) -> u8 {
         for id in 0..u8::MAX {
