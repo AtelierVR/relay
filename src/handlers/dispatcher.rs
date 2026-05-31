@@ -10,8 +10,8 @@ use crate::proto::packet_type::PacketType;
 
 use super::{
     auth, avatar_changed, custom, disconnect, enter, event, handshake, latency, message,
-    packet::Packet, player_update, properties, quit, reliable, server_config, sessions, teleport,
-    transform, traveling, voice,
+    packet::Packet, player_update, properties, quit, reliable, server_config, sessions, stream,
+    teleport, transform, traveling,
 };
 
 /// Packets that should not be logged (too frequent or low-value)
@@ -61,7 +61,7 @@ pub async fn dispatch(packet: Packet) {
 
         // ── Datagram packets ──────────────────────────────────────────────
         PacketType::Transform => transform::handle(packet).await,
-        PacketType::Voice => voice::handle(packet).await,
+        PacketType::Stream => stream::handle(packet).await,
 
         // ── Deprecated / server-only — silently ignore ───────────────────
         PacketType::PasswordRequirement => {

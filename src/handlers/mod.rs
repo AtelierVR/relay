@@ -19,4 +19,4 @@ pub mod sessions;
 pub mod teleport;
 pub mod transform;
 pub mod traveling;
-pub mod voice;
+pub mod stream;
