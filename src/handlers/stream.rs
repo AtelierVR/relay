@@ -5,8 +5,11 @@
 ///   [iid: u8][sub_type: u8][data...]
 ///
 /// Sub-type 0x00 — Sample (Opus audio):
-///   Received: [iid][0x00][hint_player_id:u16][channel_id:u32][level_flags:u8][sample:bytes…]
+///   Received: [iid][0x00][channel_id:u32][level_flags:u8][sample:bytes…]
 ///   Broadcast:[iid][0x00][auth_player_id:u16][channel_id:u32][level_flags:u8][sample:bytes…]
+///
+/// Note: The client does NOT send `player_id` — the server resolves the
+/// authenticated player from the QUIC connection and injects it in broadcasts.
 ///
 /// Sub-type 0x01 — Control (hearing permission):
 ///   Received: [iid][0x01][listener_id:u16][speaker_id:u16][control_flags:u8]
@@ -111,7 +114,6 @@ async fn handle_sample(
         }
     };
 
-    let _hint_player_id = r.read_u16();
     let channel_id = r.read_u32();
     let level_flags = r.read_u8();
 
