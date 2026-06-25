@@ -120,6 +120,10 @@ async fn handle_sample(
     // If the Group flag is set, read the group ID.
     let group_id = if (level_flags & level::GROUP_BIT) != 0 { r.read_u16() } else { 0 };
 
+    // Frame index (i32) and timestamp (f64) for jitter buffer ordering
+    let frame_index = r.read_i32();
+    let timestamp = r.read_f64();
+
     let remaining = r.remaining();
     if remaining == 0 {
         debug!("[Stream::Sample] empty sample from client {}", client_id);
@@ -138,6 +142,8 @@ async fn handle_sample(
         if (level_flags & level::GROUP_BIT) != 0 {
             w.write_u16(group_id);
         }
+        w.write_i32(frame_index);
+        w.write_f64(timestamp);
         w.write_bytes(&sample);
         encode_datagram(0, PacketType::Stream, w.finish().as_ref())
     };
