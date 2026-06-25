@@ -1,4 +1,5 @@
 use parking_lot::RwLock;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::constants::{
@@ -41,6 +42,9 @@ pub struct Instance {
     view_groups: Vec<ViewGroup>,
     /// Moderation records.
     moderated: Vec<UserModerated>,
+    /// Hearing control map: (listener_id, speaker_id, channel_id) → can_hear.
+    /// When empty, all players can hear all others. When a key exists, its value is authoritative.
+    pub hearing_map: HashMap<(u16, u16, u32), bool>,
     /// Counter for custom view-group IDs (starts at `u32::from(u16::MAX) + 1`).
     next_view_group_id: u32,
     /// Duration of the last tick in milliseconds (for load balancing).
@@ -69,6 +73,7 @@ impl Instance {
             players: Vec::new(),
             view_groups: Vec::new(),
             moderated: Vec::new(),
+            hearing_map: HashMap::new(),
             next_view_group_id: u32::from(u16::MAX) + 1,
             last_tick_duration: 0.0,
             effective_tps: None,
@@ -253,6 +258,11 @@ impl Instance {
         {
             self.view_groups.remove(pos);
         }
+
+        // Remove hearing map entries involving this player (as listener or speaker).
+        self.hearing_map.retain(|&(listener, speaker, _), _| {
+            listener != player_id && speaker != player_id
+        });
     }
 
     // ── Moderation ────────────────────────────────────────────────────────

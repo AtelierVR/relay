@@ -26,7 +26,7 @@ pub enum PacketType {
     Leave = 0x11, // server → client broadcast
     PlayerUpdate = 0x12,
     Sessions = 0x13,
-    Voice = 0x14,
+    Stream = 0x14,
     Event = 0x15,
 }
 
@@ -55,7 +55,7 @@ impl TryFrom<u8> for PacketType {
             0x11 => Ok(Self::Leave),
             0x12 => Ok(Self::PlayerUpdate),
             0x13 => Ok(Self::Sessions),
-            0x14 => Ok(Self::Voice),
+            0x14 => Ok(Self::Stream),
             0x15 => Ok(Self::Event),
             other => Err(other),
         }
@@ -76,7 +76,7 @@ impl PacketType {
     pub fn channel(self) -> Channel {
         match self {
             // High-frequency, loss-tolerant data uses datagrams.
-            PacketType::Transform | PacketType::Voice => Channel::Datagram,
+            PacketType::Transform | PacketType::Stream => Channel::Datagram,
             _ => Channel::BiStream,
         }
     }
