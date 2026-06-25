@@ -1,7 +1,12 @@
-/// Voice datagram handler — broadcasts raw audio samples to all other players.
+/// Voice / Stream datagram handler.
 ///
-/// Datagram: [iid: u8][player_id: u16][sample: bytes(remaining)]
-/// Broadcast: [iid: u8][player_id: u16][sample: bytes]
+/// Input format (after outer header is stripped by packet dispatcher):
+///   [iid: u8][sub_type: u8][channel_id: u32][level_flags: u8][sample: bytes…]
+///
+/// Broadcast format (matches C# StreamEvent.FromBuffer):
+///   [iid: u8][sub_type: u8][player_id: u16][channel_id: u32][level_flags: u8][sample: bytes…]
+///
+/// Sub-type 0x00 = Sample, 0x01 = Control.
 use tracing::debug;
 
 use crate::{
@@ -39,22 +44,22 @@ pub async fn handle(packet: Packet) {
         }
     };
 
+    // Parse StreamRequest format: [sub_type: u8][channel_id: u32][level_flags: u8][sample: bytes]
+    let sub_type = r.read_u8();
+    let channel_id = r.read_u32();
+    let level_flags = r.read_u8();
     let remaining = r.remaining();
-    if remaining == 0 || !remaining.is_multiple_of(2) {
-        debug!(
-            "[Voice] invalid sample length {} from client {}",
-            remaining, client_id
-        );
-        return;
-    }
-
     let sample = r.read_bytes(remaining);
 
-    // Build outbound datagram.
+    // Build outbound datagram matching StreamEvent.FromBuffer() wire format:
+    //   [iid: u8][sub_type: u8][player_id: u16][channel_id: u32][level_flags: u8][sample: bytes]
     let broadcast = {
         let mut w = PacketWriter::new();
         w.write_u8(iid);
+        w.write_u8(sub_type);
         w.write_u16(self_player_id);
+        w.write_u32(channel_id);
+        w.write_u8(level_flags);
         w.write_bytes(&sample);
         encode_datagram(0, PacketType::Voice, w.finish().as_ref())
     };
