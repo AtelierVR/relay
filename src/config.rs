@@ -72,10 +72,12 @@ pub struct LoadBalancingConfig {
     pub min_tps: u8,
 
     /// Weight for player count factor (0.0-1.0).
+    /// In the perf-first model this is a secondary modulator — keep it low.
     #[serde(default = "default_lb_player_weight")]
     pub player_weight: f32,
 
     /// Weight for performance factor (0.0-1.0).
+    /// The primary driver of the TPS curve. Should be dominant.
     #[serde(default = "default_lb_perf_weight")]
     pub perf_weight: f32,
 
@@ -162,10 +164,10 @@ fn default_lb_min_tps() -> u8 {
     5
 }
 fn default_lb_player_weight() -> f32 {
-    0.5 // Balanced weight between player count and performance
+    0.15 // Secondary — player count only nudges when perf is healthy
 }
 fn default_lb_perf_weight() -> f32 {
-    0.5 // Equal weight to performance for faster reaction
+    0.85 // Primary — real tick performance is the main driver
 }
 fn default_lb_perf_threshold() -> f32 {
     0.80 // 80% of tick budget - more aggressive
@@ -174,27 +176,27 @@ fn default_lb_tiers() -> Vec<LoadTier> {
     vec![
         LoadTier {
             max_players: 10,
-            tps_factor: 1.0, // Full speed up to 10 players
+            tps_factor: 1.00, // No player penalty up to 10
         },
         LoadTier {
             max_players: 20,
-            tps_factor: 0.90, // 90% at 20 players (~21.6 TPS)
+            tps_factor: 0.95,
         },
         LoadTier {
             max_players: 35,
-            tps_factor: 0.80, // 80% at 35 players (~19.2 TPS)
+            tps_factor: 0.88,
         },
         LoadTier {
             max_players: 50,
-            tps_factor: 0.70, // 70% at 50 players (~16.8 TPS)
+            tps_factor: 0.80,
         },
         LoadTier {
             max_players: 70,
-            tps_factor: 0.60, // 60% at 70 players (~14.4 TPS)
+            tps_factor: 0.72,
         },
         LoadTier {
             max_players: usize::MAX,
-            tps_factor: 0.50, // 50% beyond 70 players (~12 TPS)
+            tps_factor: 0.65, // Floor for player-count-only reduction
         },
     ]
 }

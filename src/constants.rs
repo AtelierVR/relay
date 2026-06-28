@@ -27,7 +27,7 @@ pub const DEFAULT_PROPERTY_RESEND_INTERVAL: u8 = 5;
 pub const DEFAULT_MAX_INSTANCES: u8 = 3;
 
 // Default instance settings.
-pub const DEFAULT_TPS: u8 = 24;
+pub const DEFAULT_TPS: u8 = 60;
 pub const DEFAULT_THRESHOLD: f32 = 0.001;
 pub const DEFAULT_RENDER_ENTITY: f32 = 500.0;
 

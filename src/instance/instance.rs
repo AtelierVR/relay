@@ -57,6 +57,44 @@ pub struct Instance {
     pub load_balancing_enabled: Option<bool>,
 }
 
+// ── Perf-based TPS helpers ────────────────────────────────────────────────
+
+/// Compute the performance factor (0.0–1.0) from the last tick duration.
+///
+/// * `tick_duration_ms` — how long the last tick actually took
+/// * `tick_budget_ms` — how long the tick is *allowed* to take at base TPS
+///   (e.g. 1000/60 ≈ 16.7 ms)
+/// * `config.perf_threshold` — fraction of budget below which we consider
+///   performance "healthy" (e.g. 0.80 = 80% of budget = 13.3 ms)
+fn compute_perf_factor(
+    tick_duration_ms: f32,
+    tick_budget_ms: f32,
+    config: &crate::config::LoadBalancingConfig,
+) -> f32 {
+    // Guard: no data yet or negligible duration → assume full speed.
+    if tick_duration_ms <= 0.0 {
+        return 1.0;
+    }
+
+    // Ratio: how much of the budget we consumed.
+    let usage_ratio = tick_duration_ms / tick_budget_ms;
+
+    if usage_ratio <= config.perf_threshold {
+        // Healthy — we're inside the perf budget.
+        1.0
+    } else if usage_ratio >= 1.0 {
+        // Already overshooting the tick budget — heavy reduction.
+        // Clamp to a floor so we never go below 25% TPS on perf alone.
+        (config.perf_threshold / usage_ratio).max(0.25)
+    } else {
+        // Between threshold and 100% — linear interpolation from 1.0 → perf_threshold.
+        let t = (usage_ratio - config.perf_threshold) / (1.0 - config.perf_threshold);
+        1.0 - t * (1.0 - config.perf_threshold)
+    }
+}
+
+// ── Instance ──────────────────────────────────────────────────────────────
+
 impl Instance {
     pub fn new(internal_id: u8, master_id: u32) -> Self {
         Self {
@@ -282,6 +320,10 @@ impl Instance {
     /// Calculate adaptive TPS and threshold based on load.
     /// Updates internal effective_tps/threshold and returns whether values changed.
     /// Returns (effective_tps, effective_threshold, changed).
+    ///
+    /// The TPS curve is **primarily driven by real tick performance (ms/tick)**.
+    /// Player count acts as a secondary modulator — it can only tighten the perf-based
+    /// reduction further, never relax it.
     pub fn update_adaptive_settings(
         &mut self,
         config: &crate::config::LoadBalancingConfig,
@@ -296,38 +338,31 @@ impl Instance {
             return (self.tps, self.threshold, changed);
         }
 
-        let player_count = self.players.len();
+        // ── Perf factor (primary driver) ──────────────────────────────────
+        // Derives the TPS multiplier directly from how long the last tick took
+        // relative to the tick budget.
+        let tick_budget = 1000.0 / self.tps as f32;
+        let perf_factor = compute_perf_factor(self.last_tick_duration, tick_budget, config);
 
-        // Factor 1: Player count based on configured tiers
+        // ── Player factor (secondary modulator) ────────────────────────────
+        // Only used when the perf factor is healthy (>0.85), and even then it
+        // can only *reduce* the TPS, never raise it above what perf allows.
+        let player_count = self.players.len();
         let player_factor = config
             .tiers
             .iter()
             .find(|tier| player_count <= tier.max_players)
             .map(|tier| tier.tps_factor)
-            .unwrap_or(0.50); // Fallback if no tier matches
+            .unwrap_or(0.50);
 
-        // Factor 2: Performance (tick duration vs budget)
-        let tick_budget = 1000.0 / self.tps as f32;
-        let perf_factor = if self.last_tick_duration > tick_budget * config.perf_threshold {
-            // Exceeded threshold, reduce proportionally
-            let factor = (tick_budget * config.perf_threshold / self.last_tick_duration).max(0.4);
-            // If severely overloaded (>120% of threshold), apply additional penalty
-            if self.last_tick_duration > tick_budget * config.perf_threshold * 1.2 {
-                factor * 0.85 // Additional 15% reduction
-            } else {
-                factor
-            }
+        // Combine: perf is king; player factor only nudges down when perf is good.
+        let combined = if perf_factor >= 0.90 {
+            // Perf is healthy — allow player count to influence, but weighted
+            // heavily toward perf (perf_weight ≈ 0.8–0.9 in config).
+            perf_factor * config.perf_weight + player_factor * config.player_weight
         } else {
-            1.0
-        };
-
-        // Combine factors: use minimum when performance is bad (more aggressive)
-        let combined = if perf_factor < 0.85 {
-            // Performance is degrading, use the more restrictive factor
-            player_factor.min(perf_factor)
-        } else {
-            // Normal operation, use weighted average
-            player_factor * config.player_weight + perf_factor * config.perf_weight
+            // Perf is the bottleneck — use the more restrictive of the two.
+            perf_factor.min(player_factor)
         };
 
         // Calculate effective values
@@ -335,7 +370,6 @@ impl Instance {
 
         // Make threshold more aggressive under high load
         let threshold_multiplier = if combined < 0.7 {
-            // Under heavy load, increase threshold more aggressively
             1.0 + (1.0 - combined) * 0.8
         } else {
             1.0 + (1.0 - combined) * 0.5
@@ -354,42 +388,37 @@ impl Instance {
     }
 
     /// Get current effective TPS (taking load balancing into account).
+    ///
+    /// Perf-first: the TPS is driven primarily by real tick duration;
+    /// player count is a secondary modulator.
     pub fn get_effective_tps(&self, config: &crate::config::LoadBalancingConfig) -> u8 {
         if let Some(tps) = self.effective_tps {
-            tps
-        } else {
-            // Not yet calculated, compute now (but don't store)
-            let enabled = self.load_balancing_enabled.unwrap_or(config.enabled);
-            if !enabled {
-                self.tps
-            } else {
-                let player_count = self.players.len();
-                let player_factor = config
-                    .tiers
-                    .iter()
-                    .find(|tier| player_count <= tier.max_players)
-                    .map(|tier| tier.tps_factor)
-                    .unwrap_or(0.50);
-                let tick_budget = 1000.0 / self.tps as f32;
-                let perf_factor = if self.last_tick_duration > tick_budget * config.perf_threshold {
-                    let factor =
-                        (tick_budget * config.perf_threshold / self.last_tick_duration).max(0.4);
-                    if self.last_tick_duration > tick_budget * config.perf_threshold * 1.2 {
-                        factor * 0.85
-                    } else {
-                        factor
-                    }
-                } else {
-                    1.0
-                };
-                let combined = if perf_factor < 0.85 {
-                    player_factor.min(perf_factor)
-                } else {
-                    player_factor * config.player_weight + perf_factor * config.perf_weight
-                };
-                ((self.tps as f32 * combined).max(config.min_tps as f32) as u8).min(self.tps)
-            }
+            return tps;
         }
+        // Not yet calculated — compute ad-hoc (but do not store).
+        let enabled = self.load_balancing_enabled.unwrap_or(config.enabled);
+        if !enabled {
+            return self.tps;
+        }
+
+        let tick_budget = 1000.0 / self.tps as f32;
+        let perf_factor = compute_perf_factor(self.last_tick_duration, tick_budget, config);
+
+        let player_count = self.players.len();
+        let player_factor = config
+            .tiers
+            .iter()
+            .find(|tier| player_count <= tier.max_players)
+            .map(|tier| tier.tps_factor)
+            .unwrap_or(0.50);
+
+        let combined = if perf_factor >= 0.90 {
+            perf_factor * config.perf_weight + player_factor * config.player_weight
+        } else {
+            perf_factor.min(player_factor)
+        };
+
+        ((self.tps as f32 * combined).max(config.min_tps as f32) as u8).min(self.tps)
     }
 
     /// Get current effective threshold (taking load balancing into account).
