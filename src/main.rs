@@ -100,6 +100,22 @@ async fn main() -> Result<()> {
         Arc::clone(&log_buf),
     ));
 
+    // Build CommandRegistry now that state exists
+    {
+        let command_context = crate::commands::CommandContext::new(
+            Arc::clone(&config),
+            Arc::clone(&clients),
+            Arc::clone(&instances),
+            master.start_time_ms,
+            vec![],
+            Arc::clone(&state),
+        );
+        state.commands.lock().unwrap().replace(crate::commands::CommandRegistry::new(command_context));
+    }
+
+    // Wire AppState into MasterClient for command execution
+    *master.state.lock() = Some(Arc::clone(&state));
+
     // ── MasterServer connection ────────────────────────────────────────────
     {
         let master_ref = Arc::clone(&master);

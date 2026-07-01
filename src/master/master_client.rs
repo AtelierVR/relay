@@ -17,7 +17,6 @@ use crate::utils::system_specs::get_specs;
 
 use crate::{
     client::ClientManager,
-    commands::{CommandContext, CommandRegistry},
     config::Config,
     instance::InstanceManager,
     utils::log_buffer::LogBuffer,
@@ -30,7 +29,7 @@ use super::{
         GetInstancesResp, GetPlayersReq, GetPlayersResp, HasInstanceReq, HasInstanceResp,
         InstanceInfo, LogsRequest, PingResponse, PlayerInfo, RelayConnected, RequestInstancesReq,
         RequestInstancesResp, ResolveUserRequest, ResolveUserResponse, SyncInstanceData,
-        SyncInstancesReq, SyncInstancesResp, WsMessage,
+        SyncInstancesReq, SyncInstancesResp, WorldInfo, WsMessage,
     },
     relay_extensions,
 };
@@ -58,8 +57,8 @@ pub struct MasterClient {
     connected: Arc<std::sync::atomic::AtomicBool>,
     /// Real-time log forwarder: set during an active WS session.
     log_forwarder: LogForwarder,
-    /// Command registry for handling remote commands.
-    command_registry: CommandRegistry,
+    /// Reference to AppState for command execution (set after construction).
+    pub state: parking_lot::Mutex<Option<Arc<crate::handlers::context::AppState>>>,
 }
 
 impl MasterClient {
@@ -75,15 +74,6 @@ impl MasterClient {
             .unwrap_or_default()
             .as_millis() as i64;
 
-        let command_context = CommandContext::new(
-            Arc::clone(&config),
-            Arc::clone(&clients),
-            Arc::clone(&instances),
-            start_time_ms,
-            vec![], // Will be filled by CommandRegistry
-        );
-        let command_registry = CommandRegistry::new(command_context);
-
         Self {
             config,
             clients,
@@ -95,7 +85,7 @@ impl MasterClient {
             start_time_ms,
             connected: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             log_forwarder,
-            command_registry,
+            state: parking_lot::Mutex::new(None),
         }
     }
 
@@ -348,7 +338,8 @@ impl MasterClient {
                         break;
                     }
 
-                    let mut instance = Instance::new(internal_id, spec.id);
+                    let app_state = self.state.lock().clone();
+                    let mut instance = Instance::new(internal_id, spec.id, app_state);
                     instance.capacity = spec.capacity;
                     instance.property_resend_interval = self.config.property_resend_interval;
 
@@ -404,9 +395,12 @@ impl MasterClient {
         let _ = self.emit("log", data);
     }
 
-    /// Handle incoming commands from the master server
     fn handle_command(&self, content: &str) {
-        self.command_registry.execute(content);
+        if let Some(ref state) = *self.state.lock() {
+            if let Some(ref registry) = *state.commands.lock().unwrap() {
+                registry.execute(content);
+            }
+        }
     }
 
     // ── Reconnect loop ───────────────────────────────────────────────────
@@ -633,7 +627,8 @@ impl MasterClient {
                         warn!("[MasterClient] new_instance: no available internal IDs");
                         return;
                     }
-                    let mut instance = Instance::new(internal_id, spec.id);
+                    let app_state2 = self.state.lock().clone();
+                    let mut instance = Instance::new(internal_id, spec.id, app_state2);
                     instance.capacity = spec.capacity;
                     instance.property_resend_interval = self.config.property_resend_interval;
                     if self.config.debug {
@@ -754,12 +749,12 @@ impl MasterClient {
                         }
                         let c = arc.read();
                         clients.push(ClientInfo {
-                            i: c.id,
-                            a: c.address.clone(),
-                            p: c.platform.clone(),
-                            e: c.engine.clone(),
-                            u: c.user.as_ref().map(|u| u.to_identifier()),
-                            t: c.connected_at,
+                            id: c.id,
+                            address: c.address.clone(),
+                            platform: c.platform.clone(),
+                            engine: c.engine.clone(),
+                            user: c.user.as_ref().map(|u| u.to_identifier()),
+                            connected_at: c.connected_at,
                         });
                         count += 1;
                     });
@@ -785,13 +780,23 @@ impl MasterClient {
                         .take(if req.limit > 0 { req.limit } else { 100 })
                         .map(|arc| {
                             let inst = arc.read();
+                            let (effective_tps, effective_threshold) =
+                                inst.get_effective_settings(&self.config.load_balancing);
                             InstanceInfo {
-                                i: inst.internal_id as u32,
-                                n: inst.master_id,
-                                f: inst.flags.bits(),
-                                p: inst.player_count() as u32,
-                                w: format!("{}@{}", inst.world.master_id, inst.world.address),
-                                c: inst.capacity,
+                                internal_id: inst.internal_id as u32,
+                                node_id: inst.master_id,
+                                flags: inst.flags.bits(),
+                                player_count: inst.player_count() as u32,
+                                world: WorldInfo {
+                                    master_id: inst.world.master_id,
+                                    server: inst.world.address.clone(),
+                                    version: inst.world.version,
+                                },
+                                capacity: inst.capacity,
+                                tps: inst.tps,
+                                threshold: inst.threshold,
+                                effective_tps,
+                                effective_threshold,
                             }
                         })
                         .collect();
@@ -811,19 +816,19 @@ impl MasterClient {
                     let all_instances = self.instances.all();
                     let target = all_instances
                         .iter()
-                        .find(|arc| arc.read().internal_id as u32 == req.i);
+                        .find(|arc| arc.read().internal_id as u32 == req.internal_id);
                     let (total, page) = if let Some(arc) = target {
                         let inst = arc.read();
                         let visible: Vec<&crate::player::Player> = inst
                             .get_players()
                             .iter()
-                            .filter(|p| req.a || !p.flags.contains(PlayerFlags::HIDE_IN_LIST))
+                            .filter(|p| req.all || !p.flags.contains(PlayerFlags::HIDE_IN_LIST))
                             .collect();
                         let t = visible.len() as u32;
                         let page: Vec<PlayerInfo> = visible
                             .iter()
-                            .skip(req.o)
-                            .take(if req.l > 0 { req.l } else { 20 })
+                            .skip(req.offset)
+                            .take(if req.limit > 0 { req.limit } else { 20 })
                             .map(|p| {
                                 let client_arc = self.clients.get(p.client_id);
                                 let (display, user_id) = if let Some(arc) = client_arc {
@@ -843,12 +848,14 @@ impl MasterClient {
                                     )
                                 };
                                 PlayerInfo {
-                                    i: p.id,
-                                    c: p.client_id,
-                                    d: display,
-                                    f: p.flags.bits(),
-                                    u: user_id,
-                                    j: p.created_at,
+                                    id: p.id,
+                                    client_id: p.client_id,
+                                    display,
+                                    flags: p.flags.bits(),
+                                    user: user_id,
+                                    joined_at: p.created_at,
+                                    custom_tps: p.custom_tps,
+                                    custom_threshold: p.custom_threshold,
                                 }
                             })
                             .collect();
@@ -856,7 +863,7 @@ impl MasterClient {
                     } else {
                         (0, vec![])
                     };
-                    let resp = GetPlayersResp { t: total, i: page };
+                    let resp = GetPlayersResp { total: total, players: page };
                     let mut msg = WsMessage::new("get_players", resp);
                     if let Some(id) = envelope.id {
                         msg = msg.with_id(id);

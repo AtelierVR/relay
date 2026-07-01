@@ -25,14 +25,14 @@ pub fn build_status(
         .unwrap_or_else(|| format!("0.0.0.0:{}", config.port));
     a.insert("quic".to_string(), quic_address);
     RelayStatus {
-        i: instances.count() as u32,
-        c: clients.count() as u32,
-        m: max_instances,
-        e: ENGINE.to_owned(),
-        v: VERSION.to_owned(),
-        p: PROTOCOL_VERSION,
-        u: start_time_ms,
-        s: get_specs(),
-        a,
+        instance_count: instances.count() as u32,
+        client_count: clients.count() as u32,
+        max_instances,
+        engine: ENGINE.to_owned(),
+        version: VERSION.to_owned(),
+        protocol_version: PROTOCOL_VERSION,
+        start_time_ms,
+        specs: get_specs(),
+        addresses: a,
     }
 }

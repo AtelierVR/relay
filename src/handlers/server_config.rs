@@ -93,12 +93,12 @@ pub async fn handle(mut packet: Packet) {
 
     if req_flags.contains(ServerConfigFlags::TPS) {
         let tps = r.read_u8();
-        inst_arc.write().tps = tps;
+        inst_arc.write().set_tps(tps);
         result_flags |= ServerConfigFlags::TPS;
     }
     if req_flags.contains(ServerConfigFlags::THRESHOLD) {
         let threshold = r.read_f32();
-        inst_arc.write().threshold = threshold;
+        inst_arc.write().set_threshold(threshold);
         result_flags |= ServerConfigFlags::THRESHOLD;
     }
     if req_flags.contains(ServerConfigFlags::CAPACITY) {

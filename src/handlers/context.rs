@@ -22,7 +22,19 @@ pub struct AppState {
     pub master: Arc<MasterClient>,
     pub config: Arc<Config>,
     pub log_buf: Arc<Mutex<LogBuffer>>,
+    pub commands: Arc<std::sync::Mutex<Option<crate::commands::CommandRegistry>>>,
     next_client_id: Arc<AtomicU16>,
+}
+
+impl std::fmt::Debug for AppState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppState")
+            .field("clients", &self.clients)
+            .field("instances", &self.instances)
+            .field("master", &self.master)
+            .field("config", &self.config)
+            .finish()
+    }
 }
 
 impl AppState {
@@ -39,6 +51,7 @@ impl AppState {
             master,
             config,
             log_buf,
+            commands: Arc::new(std::sync::Mutex::new(None)),
             next_client_id: Arc::new(AtomicU16::new(0)),
         }
     }

@@ -1,4 +1,5 @@
-use crate::{client::ClientManager, config::Config, instance::InstanceManager};
+use crate::{client::ClientManager, config::Config, handlers::context::AppState, instance::InstanceManager};
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 mod clients;
@@ -8,7 +9,9 @@ mod memory;
 mod restart;
 mod status;
 mod stop;
+mod tps;
 mod uptime;
+mod use_instance;
 mod version;
 
 pub use clients::ClientsCommand;
@@ -18,7 +21,9 @@ pub use memory::MemoryCommand;
 pub use restart::RestartCommand;
 pub use status::StatusCommand;
 pub use stop::StopCommand;
+pub use tps::{ThresholdCommand, TpsCommand};
 pub use uptime::UptimeCommand;
+pub use use_instance::UseCommand;
 pub use version::VersionCommand;
 
 /// Command interface - each command implements this trait
@@ -28,6 +33,11 @@ pub trait Command {
 
     /// Get the command description
     fn description(&self) -> &str;
+
+    /// Alternative names for this command (e.g. ["th"] for "threshold").
+    fn aliases(&self) -> &[&str] {
+        &[]
+    }
 
     /// Execute the command with context and optional arguments (output via logging)
     fn execute(&self, context: &CommandContext, args: &[&str]);
@@ -47,6 +57,10 @@ pub struct CommandContext {
     pub instances: Arc<InstanceManager>,
     pub start_time_ms: i64,
     pub commands_info: Vec<CommandInfo>,
+    /// Currently selected instance internal ID (set via `use` command).
+    pub selected_instance: Mutex<Option<u8>>,
+    /// Full application state (for emitting events, etc.).
+    pub state: Arc<AppState>,
 }
 
 impl CommandContext {
@@ -56,6 +70,7 @@ impl CommandContext {
         instances: Arc<InstanceManager>,
         start_time_ms: i64,
         commands_info: Vec<CommandInfo>,
+        state: Arc<AppState>,
     ) -> Self {
         Self {
             config,
@@ -63,13 +78,15 @@ impl CommandContext {
             instances,
             start_time_ms,
             commands_info,
+            selected_instance: Mutex::new(None),
+            state,
         }
     }
 }
 
 /// Command registry that manages all available commands
 pub struct CommandRegistry {
-    context: Arc<CommandContext>,
+    pub context: Arc<CommandContext>,
     commands: Vec<Box<dyn Command + Send + Sync>>,
 }
 
@@ -86,6 +103,11 @@ impl CommandRegistry {
             Box::new(UptimeCommand),
             Box::new(VersionCommand),
             Box::new(MemoryCommand),
+            Box::new(StopCommand),
+            Box::new(RestartCommand),
+            Box::new(UseCommand),
+            Box::new(TpsCommand),
+            Box::new(ThresholdCommand),
         ];
 
         // Extract command metadata
@@ -118,9 +140,13 @@ impl CommandRegistry {
         let cmd_name = parts[0].to_lowercase();
         let args = &parts[1..];
 
-        // Find and execute the command
+        // Find and execute the command (check name + aliases)
         for cmd in &self.commands {
             if cmd.name() == cmd_name {
+                cmd.execute(&self.context, args);
+                return;
+            }
+            if cmd.aliases().contains(&cmd_name.as_str()) {
                 cmd.execute(&self.context, args);
                 return;
             }

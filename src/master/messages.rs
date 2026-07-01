@@ -35,24 +35,24 @@ impl<T: Serialize> WsMessage<T> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelayStatus {
-    /// Active client count.
-    pub c: u32,
-    /// Active instance count.
-    pub i: u32,
-    /// Max instances.
-    pub m: u8,
-    /// Engine identifier.
-    pub e: String,
-    /// Relay version string.
-    pub v: String,
-    /// Protocol version.
-    pub p: u16,
-    /// Relay start Unix-ms timestamp.
-    pub u: i64,
-    /// System specs.
-    pub s: SpecsData,
-    /// Connection addresses: proto -> "host:port" (e.g. {"quic": "0.0.0.0:30000"}).
-    pub a: std::collections::HashMap<String, String>,
+    #[serde(rename = "c")]
+    pub client_count: u32,
+    #[serde(rename = "i")]
+    pub instance_count: u32,
+    #[serde(rename = "m")]
+    pub max_instances: u8,
+    #[serde(rename = "e")]
+    pub engine: String,
+    #[serde(rename = "v")]
+    pub version: String,
+    #[serde(rename = "p")]
+    pub protocol_version: u16,
+    #[serde(rename = "u")]
+    pub start_time_ms: i64,
+    #[serde(rename = "s")]
+    pub specs: SpecsData,
+    #[serde(rename = "a")]
+    pub addresses: std::collections::HashMap<String, String>,
 }
 
 // ─── resolve_user ────────────────────────────────────────────────────────────
@@ -211,6 +211,20 @@ pub struct EventPlayerLeave {
     pub reason: String,
 }
 
+/// Emitted to the node when an instance's TPS or threshold is changed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventInstanceSettingsChanged {
+    /// Relay-internal instance slot (0–254).
+    #[serde(rename = "i")]
+    pub internal_id: u8,
+    /// New configured TPS.
+    #[serde(rename = "t")]
+    pub tps: u8,
+    /// New configured threshold.
+    #[serde(rename = "th")]
+    pub threshold: f32,
+}
+
 // ─── drop_instance ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -264,12 +278,18 @@ pub struct GetClientsResp {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientInfo {
-    pub i: u16,            // client ID
-    pub a: String,         // address
-    pub p: String,         // platform
-    pub e: String,         // engine
-    pub u: Option<String>, // user identifier (optional)
-    pub t: i64,            // connected_at (Unix ms)
+    #[serde(rename = "i")]
+    pub id: u16,
+    #[serde(rename = "a")]
+    pub address: String,
+    #[serde(rename = "p")]
+    pub platform: String,
+    #[serde(rename = "e")]
+    pub engine: String,
+    #[serde(rename = "u")]
+    pub user: Option<String>,
+    #[serde(rename = "t")]
+    pub connected_at: i64,
 }
 
 // ─── ping ────────────────────────────────────────────────────────────────────
@@ -305,43 +325,76 @@ pub struct GetInstancesResp {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstanceInfo {
-    pub i: u32,    // internal ID (relay-local slot 0–254)
-    pub n: u32,    // node ID (master/DB ID)
-    pub f: u32,    // flags
-    pub p: u32,    // player count (all, including HIDE_IN_LIST)
-    pub w: String, // world
-    pub c: u16,    // capacity
+    #[serde(rename = "i")]
+    pub internal_id: u32,
+    #[serde(rename = "n")]
+    pub node_id: u32,
+    #[serde(rename = "f")]
+    pub flags: u32,
+    #[serde(rename = "p")]
+    pub player_count: u32,
+    #[serde(rename = "w")]
+    pub world: WorldInfo,
+    #[serde(rename = "c")]
+    pub capacity: u16,
+    #[serde(rename = "t")]
+    pub tps: u8,
+    #[serde(rename = "th")]
+    pub threshold: f32,
+    #[serde(rename = "et")]
+    pub effective_tps: u8,
+    #[serde(rename = "eh")]
+    pub effective_threshold: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorldInfo {
+    #[serde(rename = "i")]
+    pub master_id: u32,
+    #[serde(rename = "s")]
+    pub server: String,
+    #[serde(rename = "v")]
+    pub version: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerInfo {
-    pub i: u16,            // player ID
-    pub c: u16,            // client ID
-    pub d: String,         // display name
-    pub f: u32,            // flags
-    pub u: Option<String>, // user identifier (e.g. "1@hactazia.fr"), None if unauthenticated
-    pub j: i64,            // joined_at (Unix ms)
+    #[serde(rename = "i")]
+    pub id: u16,
+    #[serde(rename = "c")]
+    pub client_id: u16,
+    #[serde(rename = "d")]
+    pub display: String,
+    #[serde(rename = "f")]
+    pub flags: u32,
+    #[serde(rename = "u")]
+    pub user: Option<String>,
+    #[serde(rename = "j")]
+    pub joined_at: i64,
+    #[serde(rename = "ct")]
+    pub custom_tps: u8,
+    #[serde(rename = "ch")]
+    pub custom_threshold: f32,
 }
 
 // ─── get_players ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetPlayersReq {
-    /// Internal instance ID (matches InstanceInfo.i).
-    pub i: u32,
-    #[serde(default)]
-    pub l: usize,
-    #[serde(default)]
-    pub o: usize,
-    /// When true, include players with the HIDE_IN_LIST flag. Default false.
-    #[serde(default)]
-    pub a: bool,
+    #[serde(rename = "i")]
+    pub internal_id: u32,
+    #[serde(rename = "l")]
+    pub limit: usize,
+    #[serde(rename = "o")]
+    pub offset: usize,
+    #[serde(rename = "a")]
+    pub all: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetPlayersResp {
-    /// Total number of visible (or all, if all=true) players in the instance.
-    pub t: u32,
-    /// The requested page of players.
-    pub i: Vec<PlayerInfo>,
+    #[serde(rename = "t")]
+    pub total: u32,
+    #[serde(rename = "i")]
+    pub players: Vec<PlayerInfo>,
 }

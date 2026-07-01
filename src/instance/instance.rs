@@ -5,6 +5,7 @@ use std::sync::Arc;
 use crate::constants::{
     DEFAULT_PROPERTY_RESEND_INTERVAL, DEFAULT_RENDER_ENTITY, DEFAULT_THRESHOLD, DEFAULT_TPS,
 };
+use crate::handlers::context::AppState;
 use crate::player::Player;
 use crate::utils::hashing::verify_password;
 
@@ -55,6 +56,8 @@ pub struct Instance {
     effective_threshold: Option<f32>,
     /// Load balancing enabled override (None = use global config).
     pub load_balancing_enabled: Option<bool>,
+    /// Application state for emitting config change events.
+    state: Option<Arc<AppState>>,
 }
 
 // ── Perf-based TPS helpers ────────────────────────────────────────────────
@@ -96,7 +99,7 @@ fn compute_perf_factor(
 // ── Instance ──────────────────────────────────────────────────────────────
 
 impl Instance {
-    pub fn new(internal_id: u8, master_id: u32) -> Self {
+    pub fn new(internal_id: u8, master_id: u32, state: Option<Arc<AppState>>) -> Self {
         Self {
             internal_id,
             master_id,
@@ -117,7 +120,39 @@ impl Instance {
             effective_tps: None,
             effective_threshold: None,
             load_balancing_enabled: None,
+            state,
         }
+    }
+
+    /// Set the configured TPS, reset effective, and emit event.
+    pub fn set_tps(&mut self, value: u8) {
+        self.tps = value;
+        self.reset_effective_settings();
+        self.emit_instance_config();
+    }
+
+    /// Set the configured threshold, reset effective, and emit event.
+    pub fn set_threshold(&mut self, value: f32) {
+        self.threshold = value;
+        self.reset_effective_settings();
+        self.emit_instance_config();
+    }
+
+    /// Emit instance_settings_changed event to the node (if state is set).
+    fn emit_instance_config(&self) {
+        if let Some(ref state) = self.state {
+            let _ = state.master.emit("instance_settings_changed", serde_json::json!({
+                "i": self.internal_id,
+                "t": self.tps,
+                "th": self.threshold,
+            }));
+        }
+    }
+
+    /// Reset effective TPS/threshold so load balancing recalculates from new base values.
+    pub fn reset_effective_settings(&mut self) {
+        self.effective_tps = None;
+        self.effective_threshold = None;
     }
 
     // ── Password ───────────────────────────────────────────────────────────
@@ -429,6 +464,11 @@ impl Instance {
             // Not yet calculated
             self.threshold
         }
+    }
+
+    /// Get both effective TPS and threshold at once.
+    pub fn get_effective_settings(&self, config: &crate::config::LoadBalancingConfig) -> (u8, f32) {
+        (self.get_effective_tps(config), self.get_effective_threshold(config))
     }
 
     /// Get the effective TPS for a specific player.

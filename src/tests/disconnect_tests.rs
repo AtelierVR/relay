@@ -115,7 +115,7 @@ fn player_removed_from_instance_after_disconnect() {
     set_handshaked(&state, 1);
 
     // Put client 1 into instance 1 as a ready player.
-    let inst = Instance::new(1, 0);
+    let inst = Instance::new(1, 0, None);
     let arc_inst = state.instances.add(inst);
     {
         let mut inst_w = arc_inst.write();
@@ -146,8 +146,8 @@ fn player_removed_from_all_instances_after_disconnect() {
     set_handshaked(&state, 5);
 
     // Add the same client to two different instances.
-    let inst_a = Instance::new(10, 0);
-    let inst_b = Instance::new(20, 0);
+    let inst_a = Instance::new(10, 0, None);
+    let inst_b = Instance::new(20, 0, None);
     let arc_a = state.instances.add(inst_a);
     let arc_b = state.instances.add(inst_b);
 
@@ -190,7 +190,7 @@ fn other_players_receive_leave_broadcast() {
     let mut rx_observer = register_client(&state, 2);
     set_handshaked(&state, 2);
 
-    let inst = Instance::new(1, 0);
+    let inst = Instance::new(1, 0, None);
     let arc_inst = state.instances.add(inst);
 
     {
@@ -223,8 +223,8 @@ fn disconnect_does_not_affect_other_clients() {
     set_handshaked(&state, 2);
 
     // Put both clients in separate instances — only client 1 disconnects.
-    let inst_a = Instance::new(1, 0);
-    let inst_b = Instance::new(2, 0);
+    let inst_a = Instance::new(1, 0, None);
+    let inst_b = Instance::new(2, 0, None);
     let arc_a = state.instances.add(inst_a);
     let arc_b = state.instances.add(inst_b);
 
