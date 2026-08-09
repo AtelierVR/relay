@@ -29,9 +29,11 @@ impl Command for TpsCommand {
         let mut inst = arc_inst.write();
 
         if args.is_empty() {
-            info!("Instance #{iid} TPS: {} (effective: {})",
+            info!(
+                "Instance #{iid} TPS: {} (effective: {})",
                 inst.tps,
-                inst.get_effective_tps(&context.config.load_balancing));
+                inst.get_effective_tps(&context.config.load_balancing)
+            );
         } else {
             let value: u8 = match args[0].parse() {
                 Ok(v) if v > 0 => v,
@@ -82,9 +84,11 @@ impl Command for ThresholdCommand {
         let mut inst = arc_inst.write();
 
         if args.is_empty() {
-            info!("Instance #{iid} threshold: {} (effective: {})",
+            info!(
+                "Instance #{iid} threshold: {} (effective: {})",
                 inst.threshold,
-                inst.get_effective_threshold(&context.config.load_balancing));
+                inst.get_effective_threshold(&context.config.load_balancing)
+            );
         } else {
             let value: f32 = match args[0].parse() {
                 Ok(v) if v >= 0.0 => v,

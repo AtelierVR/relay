@@ -141,11 +141,14 @@ impl Instance {
     /// Emit instance_settings_changed event to the node (if state is set).
     fn emit_instance_config(&self) {
         if let Some(ref state) = self.state {
-            let _ = state.master.emit("instance_settings_changed", serde_json::json!({
-                "i": self.internal_id,
-                "t": self.tps,
-                "th": self.threshold,
-            }));
+            let _ = state.master.emit(
+                "instance_settings_changed",
+                serde_json::json!({
+                    "i": self.internal_id,
+                    "t": self.tps,
+                    "th": self.threshold,
+                }),
+            );
         }
     }
 
@@ -333,9 +336,8 @@ impl Instance {
         }
 
         // Remove hearing map entries involving this player (as listener or speaker).
-        self.hearing_map.retain(|&(listener, speaker, _), _| {
-            listener != player_id && speaker != player_id
-        });
+        self.hearing_map
+            .retain(|&(listener, speaker, _), _| listener != player_id && speaker != player_id);
     }
 
     // ── Moderation ────────────────────────────────────────────────────────
@@ -468,7 +470,10 @@ impl Instance {
 
     /// Get both effective TPS and threshold at once.
     pub fn get_effective_settings(&self, config: &crate::config::LoadBalancingConfig) -> (u8, f32) {
-        (self.get_effective_tps(config), self.get_effective_threshold(config))
+        (
+            self.get_effective_tps(config),
+            self.get_effective_threshold(config),
+        )
     }
 
     /// Get the effective TPS for a specific player.

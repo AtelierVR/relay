@@ -1,4 +1,6 @@
-use crate::{client::ClientManager, config::Config, handlers::context::AppState, instance::InstanceManager};
+use crate::{
+    client::ClientManager, config::Config, handlers::context::AppState, instance::InstanceManager,
+};
 use parking_lot::Mutex;
 use std::sync::Arc;
 

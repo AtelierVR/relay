@@ -110,7 +110,11 @@ async fn main() -> Result<()> {
             vec![],
             Arc::clone(&state),
         );
-        state.commands.lock().unwrap().replace(crate::commands::CommandRegistry::new(command_context));
+        state
+            .commands
+            .lock()
+            .unwrap()
+            .replace(crate::commands::CommandRegistry::new(command_context));
     }
 
     // Wire AppState into MasterClient for command execution

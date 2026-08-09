@@ -16,7 +16,7 @@ pub mod quit;
 pub mod reliable;
 pub mod server_config;
 pub mod sessions;
+pub mod stream;
 pub mod teleport;
 pub mod transform;
 pub mod traveling;
-pub mod stream;

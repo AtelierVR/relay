@@ -108,7 +108,10 @@ async fn handle_sample(
         match inst.get_players().iter().find(|p| p.client_id == client_id) {
             Some(p) if p.is_ready() => p.id,
             _ => {
-                debug!("[Stream::Sample] not-ready player from client {}", client_id);
+                debug!(
+                    "[Stream::Sample] not-ready player from client {}",
+                    client_id
+                );
                 return;
             }
         }
@@ -118,7 +121,11 @@ async fn handle_sample(
     let level_flags = r.read_u8();
 
     // If the Group flag is set, read the group ID.
-    let group_id = if (level_flags & level::GROUP_BIT) != 0 { r.read_u16() } else { 0 };
+    let group_id = if (level_flags & level::GROUP_BIT) != 0 {
+        r.read_u16()
+    } else {
+        0
+    };
 
     // Frame index (i32) and timestamp (f64) for jitter buffer ordering
     let frame_index = r.read_i32();
@@ -169,7 +176,10 @@ async fn handle_sample(
     }
 }
 
-async fn handle_control(inst_arc: &parking_lot::RwLock<crate::instance::Instance>, r: &mut PacketReader) {
+async fn handle_control(
+    inst_arc: &parking_lot::RwLock<crate::instance::Instance>,
+    r: &mut PacketReader,
+) {
     let listener_id = r.read_u16();
     let speaker_id = r.read_u16();
     let control_flags = r.read_u8();
@@ -179,9 +189,11 @@ async fn handle_control(inst_arc: &parking_lot::RwLock<crate::instance::Instance
     {
         let mut inst = inst_arc.write();
         if can_hear {
-            inst.hearing_map.insert((listener_id, speaker_id, WILDCARD_CHANNEL), true);
+            inst.hearing_map
+                .insert((listener_id, speaker_id, WILDCARD_CHANNEL), true);
         } else {
-            inst.hearing_map.remove(&(listener_id, speaker_id, WILDCARD_CHANNEL));
+            inst.hearing_map
+                .remove(&(listener_id, speaker_id, WILDCARD_CHANNEL));
         }
     }
 

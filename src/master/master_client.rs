@@ -16,10 +16,7 @@ use uuid::Uuid;
 use crate::utils::system_specs::get_specs;
 
 use crate::{
-    client::ClientManager,
-    config::Config,
-    instance::InstanceManager,
-    utils::log_buffer::LogBuffer,
+    client::ClientManager, config::Config, instance::InstanceManager, utils::log_buffer::LogBuffer,
     utils::log_layer::LogForwarder,
 };
 
@@ -587,8 +584,8 @@ impl MasterClient {
 
     /// Process one inbound WS text message.
     async fn handle_inbound(&self, text: &str) {
-        use crate::instance::{Instance, InstanceFlags, World};
         use super::messages::InstanceSpec;
+        use crate::instance::{Instance, InstanceFlags, World};
         let Ok(envelope) = serde_json::from_str::<WsMessage<Value>>(text) else {
             warn!("[MasterClient] Failed to parse inbound: {text}");
             return;
@@ -864,7 +861,10 @@ impl MasterClient {
                     } else {
                         (0, vec![])
                     };
-                    let resp = GetPlayersResp { total: total, players: page };
+                    let resp = GetPlayersResp {
+                        total: total,
+                        players: page,
+                    };
                     let mut msg = WsMessage::new("get_players", resp);
                     if let Some(id) = envelope.id {
                         msg = msg.with_id(id);
