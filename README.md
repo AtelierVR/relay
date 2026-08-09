@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.png" width="320" alt="NoxVR" />
+  <img src=".github/header.png" width="640" alt="NoxVR" />
   <h1>Relay</h1>
   <p>High-performance QUIC relay server for NoxVR game instances.</p>
 
