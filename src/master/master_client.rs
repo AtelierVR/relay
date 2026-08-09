@@ -862,7 +862,7 @@ impl MasterClient {
                         (0, vec![])
                     };
                     let resp = GetPlayersResp {
-                        total: total,
+                        total,
                         players: page,
                     };
                     let mut msg = WsMessage::new("get_players", resp);
