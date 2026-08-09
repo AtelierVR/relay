@@ -39,6 +39,7 @@ type PendingMap = Arc<DashMap<String, oneshot::Sender<Value>>>;
 /// Async WebSocket client for the MasterServer connection.
 ///
 /// Reconnects automatically with exponential back-off on disconnect.
+#[derive(Debug)]
 pub struct MasterClient {
     config: Arc<Config>,
     clients: Arc<ClientManager>,
