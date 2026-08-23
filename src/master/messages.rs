@@ -157,6 +157,8 @@ pub struct EventClientConnected {
     pub id: u16,
     /// Remote IP:port.
     pub address: String,
+    /// host:port, that was used to connect to the server.
+    pub from: String,
     /// Client platform (e.g. "windows", "android").
     pub platform: String,
     /// Client engine identifier (e.g. "unity").
@@ -280,6 +282,8 @@ pub struct GetClientsResp {
 pub struct ClientInfo {
     #[serde(rename = "i")]
     pub id: u16,
+    #[serde(rename = "f")]
+    pub from: String,
     #[serde(rename = "a")]
     pub address: String,
     #[serde(rename = "p")]

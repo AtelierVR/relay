@@ -60,7 +60,7 @@ pub fn handle_inner(state: &Arc<AppState>, client_id: u16, uid: u16, payload: By
     }
 
     // Notify the master server that a client has connected (platform/engine now known).
-    let address = state
+    let client_address = state
         .clients
         .get(client_id)
         .map(|arc| arc.read().address.clone())
@@ -74,7 +74,8 @@ pub fn handle_inner(state: &Arc<AppState>, client_id: u16, uid: u16, payload: By
         "client_connected",
         EventClientConnected {
             id: client_id,
-            address,
+            address: client_address,
+            from: format!("{}:{}", address, port),
             platform: platform.clone(),
             engine: engine.clone(),
             connected_at,

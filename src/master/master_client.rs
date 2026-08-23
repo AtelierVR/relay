@@ -749,6 +749,7 @@ impl MasterClient {
                         clients.push(ClientInfo {
                             id: c.id,
                             address: c.address.clone(),
+                            from: c.from.clone(),
                             platform: c.platform.clone(),
                             engine: c.engine.clone(),
                             user: c.user.as_ref().map(|u| u.to_identifier()),

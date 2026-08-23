@@ -22,9 +22,17 @@ use super::helpers::{decode_stream, make_state, register_client};
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 /// Build a valid handshake request payload.
-fn handshake_payload(protocol: u16, engine: &str, platform: &str) -> Bytes {
+fn handshake_payload(
+    protocol: u16, 
+    from_address: &str,
+    from_port: u16,
+    engine: &str, 
+    platform: &str
+) -> Bytes {
     let mut w = PacketWriter::new();
     w.write_u16(protocol);
+    w.write_string(from_address);
+    w.write_u16(from_port);
     w.write_string(engine);
     w.write_string(platform);
     w.finish()
@@ -36,7 +44,7 @@ fn handshake_payload(protocol: u16, engine: &str, platform: &str) -> Bytes {
 fn wrong_protocol_returns_empty() {
     let state = make_state();
     let _rx = register_client(&state, 1);
-    let response = handshake::handle_inner(&state, 1, 99, handshake_payload(0xFFFF, "Unity", "PC"));
+    let response = handshake::handle_inner(&state, 1, 99, handshake_payload(0xFFFF, "returns_empty.local", 4242, "Unity", "PC"));
     assert!(
         response.is_empty(),
         "incompatible protocol must return empty Bytes"
@@ -51,7 +59,7 @@ fn correct_protocol_returns_response() {
         &state,
         1,
         1,
-        handshake_payload(PROTOCOL_VERSION, "Unity", "PC"),
+        handshake_payload(PROTOCOL_VERSION, "returns_response.local", 4242, "Unity", "PC"),
     );
     assert!(
         !response.is_empty(),
@@ -67,7 +75,7 @@ fn response_is_handshake_packet_type() {
         &state,
         1,
         7,
-        handshake_payload(PROTOCOL_VERSION, "Unity", "PC"),
+        handshake_payload(PROTOCOL_VERSION, "packet_type.local", 4242, "Unity", "PC"),
     );
     let (uid, ptype, _) = decode_stream(response);
     assert_eq!(uid, 7, "UID must be echoed back");
@@ -84,7 +92,7 @@ fn response_payload_matches_c_sharp_format() {
         &state,
         42,
         1,
-        handshake_payload(PROTOCOL_VERSION, "Unreal", "Quest"),
+        handshake_payload(PROTOCOL_VERSION, "c_sharp.local", 4242, "Unreal", "Quest"),
     );
     let (_uid, _ptype, payload) = decode_stream(response);
 
@@ -128,7 +136,7 @@ fn sets_client_auth_state_to_handshaked() {
         &state,
         5,
         0,
-        handshake_payload(PROTOCOL_VERSION, "Unity", "PC"),
+        handshake_payload(PROTOCOL_VERSION, "local", 42, "Unity", "PC"),
     );
     // After: Handshaked
     assert_eq!(
@@ -145,7 +153,7 @@ fn stores_engine_and_platform() {
         &state,
         10,
         0,
-        handshake_payload(PROTOCOL_VERSION, "GodotEngine", "Android"),
+        handshake_payload(PROTOCOL_VERSION, "local", 42, "GodotEngine", "Android"),
     );
     let arc = state.clients.get(10).unwrap();
     let c = arc.read();
@@ -162,7 +170,7 @@ fn response_uid_matches_request_uid() {
             &state,
             1,
             uid,
-            handshake_payload(PROTOCOL_VERSION, "u", "p"),
+            handshake_payload(PROTOCOL_VERSION, "local", 42, "u", "p"),
         );
         if !resp.is_empty() {
             let (resp_uid, _, _) = decode_stream(resp);
@@ -179,7 +187,7 @@ fn response_uid_matches_request_uid() {
 fn wrong_protocol_does_not_mutate_auth_state() {
     let state = make_state();
     let _rx = register_client(&state, 3);
-    handshake::handle_inner(&state, 3, 0, handshake_payload(0x9999, "X", "Y"));
+    handshake::handle_inner(&state, 3, 0, handshake_payload(0x9999, "local", 42, "X", "Y"));
     assert_eq!(
         state.clients.get(3).unwrap().read().auth_state,
         AuthState::None,
