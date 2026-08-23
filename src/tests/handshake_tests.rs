@@ -23,11 +23,11 @@ use super::helpers::{decode_stream, make_state, register_client};
 
 /// Build a valid handshake request payload.
 fn handshake_payload(
-    protocol: u16, 
+    protocol: u16,
     from_address: &str,
     from_port: u16,
-    engine: &str, 
-    platform: &str
+    engine: &str,
+    platform: &str,
 ) -> Bytes {
     let mut w = PacketWriter::new();
     w.write_u16(protocol);
@@ -44,7 +44,12 @@ fn handshake_payload(
 fn wrong_protocol_returns_empty() {
     let state = make_state();
     let _rx = register_client(&state, 1);
-    let response = handshake::handle_inner(&state, 1, 99, handshake_payload(0xFFFF, "returns_empty.local", 4242, "Unity", "PC"));
+    let response = handshake::handle_inner(
+        &state,
+        1,
+        99,
+        handshake_payload(0xFFFF, "returns_empty.local", 4242, "Unity", "PC"),
+    );
     assert!(
         response.is_empty(),
         "incompatible protocol must return empty Bytes"
@@ -59,7 +64,13 @@ fn correct_protocol_returns_response() {
         &state,
         1,
         1,
-        handshake_payload(PROTOCOL_VERSION, "returns_response.local", 4242, "Unity", "PC"),
+        handshake_payload(
+            PROTOCOL_VERSION,
+            "returns_response.local",
+            4242,
+            "Unity",
+            "PC",
+        ),
     );
     assert!(
         !response.is_empty(),
@@ -187,7 +198,12 @@ fn response_uid_matches_request_uid() {
 fn wrong_protocol_does_not_mutate_auth_state() {
     let state = make_state();
     let _rx = register_client(&state, 3);
-    handshake::handle_inner(&state, 3, 0, handshake_payload(0x9999, "local", 42, "X", "Y"));
+    handshake::handle_inner(
+        &state,
+        3,
+        0,
+        handshake_payload(0x9999, "local", 42, "X", "Y"),
+    );
     assert_eq!(
         state.clients.get(3).unwrap().read().auth_state,
         AuthState::None,
