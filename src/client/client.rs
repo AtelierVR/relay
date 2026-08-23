@@ -42,6 +42,8 @@ pub struct Client {
     pub id: u16,
     /// Remote IP:port address of the client (e.g. `"1.2.3.4:5678"`).
     pub address: String,
+    /// Address:port, that was used to connect to the server.
+    pub from: String,
     /// Client platform string (e.g. `"PC"`, `"Quest"`).
     pub platform: String,
     /// Client engine string (e.g. `"Unity"`, `"Unreal"`).
@@ -71,6 +73,7 @@ impl Client {
         Self {
             id,
             address: String::new(),
+            from: String::new(),
             platform: String::new(),
             engine: String::new(),
             last_seen: Instant::now(),

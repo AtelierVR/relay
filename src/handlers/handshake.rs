@@ -42,6 +42,9 @@ pub fn handle_inner(state: &Arc<AppState>, client_id: u16, uid: u16, payload: By
         return Bytes::new();
     }
 
+    let address = r.read_string().unwrap_or_default();
+    let port = r.read_u16();
+
     let engine = r.read_string().unwrap_or_default();
     let platform = r.read_string().unwrap_or_default();
 
@@ -52,6 +55,7 @@ pub fn handle_inner(state: &Arc<AppState>, client_id: u16, uid: u16, payload: By
         let mut c = arc.write();
         c.engine = engine.clone();
         c.platform = platform.clone();
+        c.from = format!("{}:{}", address, port);
         c.auth_state = AuthState::Handshaked;
     }
 
