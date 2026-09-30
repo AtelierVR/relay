@@ -21,7 +21,7 @@ use std::{net::SocketAddr, sync::Arc};
 use anyhow::Result;
 use quinn::Endpoint;
 use tracing::{error, info};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{
     client::ClientManager,
@@ -45,11 +45,9 @@ async fn main() -> Result<()> {
     let log_forwarder = Arc::new(parking_lot::Mutex::new(None));
 
     // ── Tracing with LogBufferLayer ───────────────────────────────────────
-    let filter = if config.debug {
-        EnvFilter::new("debug")
-    } else {
-        EnvFilter::new("info")
-    };
+    // The filter layer is reloadable so the `debug` command can flip the level
+    // (info <-> debug) at runtime without restarting the relay.
+    let filter_layer = crate::utils::logging::build(config.debug);
 
     let log_layer = crate::utils::log_layer::LogBufferLayer::new(
         Arc::clone(&log_buf),
@@ -57,7 +55,7 @@ async fn main() -> Result<()> {
     );
 
     tracing_subscriber::registry()
-        .with(filter)
+        .with(filter_layer)
         .with(tracing_subscriber::fmt::layer())
         .with(log_layer)
         .init();

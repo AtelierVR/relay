@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 
 mod clients;
+mod debug;
 mod help;
 mod instances;
 mod memory;
@@ -17,6 +18,7 @@ mod use_instance;
 mod version;
 
 pub use clients::ClientsCommand;
+pub use debug::DebugCommand;
 pub use help::HelpCommand;
 pub use instances::InstancesCommand;
 pub use memory::MemoryCommand;
@@ -97,6 +99,7 @@ impl CommandRegistry {
         // Create commands without context
         let commands: Vec<Box<dyn Command + Send + Sync>> = vec![
             Box::new(HelpCommand),
+            Box::new(DebugCommand),
             Box::new(StopCommand),
             Box::new(RestartCommand),
             Box::new(StatusCommand),
