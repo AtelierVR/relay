@@ -107,6 +107,56 @@ fn make_test_connection() -> Arc<Connection> {
     })
 }
 
+/// Create a live loopback QUIC pair, keeping both endpoints alive.
+///
+/// Unlike [`make_test_connection`], the client endpoint is returned so the
+/// connection stays usable (dropping an `Endpoint` closes its connections).
+/// Returns `(server_endpoint, server_side_conn, client_endpoint, client_side_conn)`.
+pub async fn connect_pair() -> (
+    quinn::Endpoint,
+    quinn::Connection,
+    quinn::Endpoint,
+    quinn::Connection,
+) {
+    let server_config =
+        crate::transport::tls::make_server_config(&[], 30, 5).expect("test server TLS");
+    let server_ep =
+        quinn::Endpoint::server(server_config, "127.0.0.1:0".parse().unwrap()).unwrap();
+    let server_addr = server_ep.local_addr().unwrap();
+
+    let mut client_tls = rustls::ClientConfig::builder()
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(NoVerifier))
+        .with_no_client_auth();
+    client_tls.alpn_protocols = vec![b"relay".to_vec()];
+
+    let quic_client =
+        quinn::crypto::rustls::QuicClientConfig::try_from(Arc::new(client_tls)).unwrap();
+    let mut client_cfg = quinn::ClientConfig::new(Arc::new(quic_client));
+
+    let mut transport = quinn::TransportConfig::default();
+    transport.datagram_receive_buffer_size(Some(65536));
+    client_cfg.transport_config(Arc::new(transport));
+
+    let mut client_ep = quinn::Endpoint::client("127.0.0.1:0".parse().unwrap()).unwrap();
+    client_ep.set_default_client_config(client_cfg);
+
+    let connecting = client_ep.connect(server_addr, "localhost").unwrap();
+    // Both the client handshake and the server-side accept must be driven
+    // concurrently: dropping `Connecting` would cancel the handshake.
+    let (client_conn, server_conn) = tokio::join!(connecting, async {
+        let incoming = server_ep.accept().await.expect("server accept");
+        incoming.await.expect("server handshake")
+    });
+
+    (
+        server_ep,
+        server_conn,
+        client_ep,
+        client_conn.expect("client handshake"),
+    )
+}
+
 /// Build a minimal `AppState` for unit tests.
 /// - `node_address` is set to `DEFAULT_NODE_ADDRESS` so `has_master = true`.
 pub fn make_state() -> Arc<AppState> {
@@ -116,6 +166,7 @@ pub fn make_state() -> Arc<AppState> {
         node_address: DEFAULT_NODE_ADDRESS.to_owned(),
         use_address: None,
         token: String::new(),
+        instances: Vec::new(),
         max_instances: 3,
         connection_timeout: 15,
         keep_alive_interval: 5,

@@ -10,6 +10,7 @@ mod instance;
 mod master;
 mod player;
 mod proto;
+mod shutdown;
 mod transport;
 mod utils;
 
@@ -20,7 +21,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
 use quinn::Endpoint;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{
@@ -118,8 +119,53 @@ async fn main() -> Result<()> {
     // Wire AppState into MasterClient for command execution
     *master.state.lock() = Some(Arc::clone(&state));
 
-    // ── MasterServer connection ────────────────────────────────────────────
-    {
+    // ── MasterServer connection (skipped in standalone) ────────────────────
+    if config.is_standalone() {
+        info!("[Standalone] master connection disabled, self-hosting instance(s)");
+        if config.instances.is_empty() {
+            let instance = crate::instance::Instance::new(0, 0, Some(Arc::clone(&state)));
+            state.instances.add(instance);
+        } else {
+            for (i, spec) in config.instances.iter().enumerate() {
+                let mut instance =
+                    crate::instance::Instance::new(i as u8, 0, Some(Arc::clone(&state)));
+                instance.capacity = spec.capacity;
+                instance.set_password(spec.password.clone());
+                if let Some(world) = &spec.world {
+                    match world {
+                        crate::config::WorldConfig::Identifier(id) => {
+                            match parse_world_identifier(id) {
+                                Some(w) => {
+                                    instance.world = crate::instance::TravelTarget::Node(w)
+                                }
+                                None => warn!(
+                                    "[Standalone] instance {i}: invalid world identifier '{id}'"
+                                ),
+                            }
+                        }
+                        crate::config::WorldConfig::Bundle { url, hash, size } => {
+                            match decode_hash(hash) {
+                                Some(h) => {
+                                    instance.world = crate::instance::TravelTarget::Bundle(
+                                        crate::instance::world::WorldBundle {
+                                            url: url.clone(),
+                                            hash: h,
+                                            size: *size,
+                                        },
+                                    );
+                                }
+                                None => warn!(
+                                    "[Standalone] instance {i}: invalid world hash '{hash}'"
+                                ),
+                            }
+                        }
+                    }
+                }
+                state.instances.add(instance);
+                info!("[Standalone] instance {i} hosted");
+            }
+        }
+    } else {
         let master_ref = Arc::clone(&master);
         tokio::spawn(async move {
             info!("[Master] Starting connection...");
@@ -144,13 +190,63 @@ async fn main() -> Result<()> {
     //     });
     // }
 
-    // ── QUIC accept loop ──────────────────────────────────────────────────
-    if let Err(e) = quic_server::run(state, endpoint).await {
-        error!("[main] QUIC server error: {e}");
+    // ── QUIC accept loop (with graceful Ctrl+C shutdown) ───────────────────
+    let accept_endpoint = endpoint.clone();
+    let accept_state = Arc::clone(&state);
+
+    tokio::select! {
+        result = quic_server::run(accept_state, accept_endpoint) => {
+            if let Err(e) = result {
+                error!("[main] QUIC server error: {e}");
+            }
+        }
+        signal = shutdown_signal() => {
+            info!(
+                "[Relay] {signal} received — disconnecting all clients and shutting down..."
+            );
+
+            // A second signal forces an immediate exit instead of waiting.
+            tokio::spawn(async {
+                let second = shutdown_signal().await;
+                warn!("[Relay] Second {second} received — forcing exit");
+                std::process::exit(130);
+            });
+
+            crate::shutdown::graceful_shutdown(&state, &endpoint, "Server is shutting down")
+                .await;
+        }
     }
 
     info!("[Relay] NoxRelay stopped");
     Ok(())
+}
+
+/// Resolves when the user requests a shutdown: `Ctrl+C` on every platform, and
+/// additionally `Ctrl+Break` on Windows (handy when Ctrl+C is swallowed by the
+/// parent process/host).
+async fn shutdown_signal() -> &'static str {
+    #[cfg(windows)]
+    {
+        let mut ctrl_break = match tokio::signal::windows::ctrl_break() {
+            Ok(handler) => handler,
+            Err(e) => {
+                warn!("[Relay] failed to install Ctrl+Break handler: {e}");
+                let _ = tokio::signal::ctrl_c().await;
+                return "Ctrl+C";
+            }
+        };
+
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => "Ctrl+C",
+            _ = ctrl_break.recv() => "Ctrl+Break",
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+        "Ctrl+C"
+    }
 }
 
 /// Periodic task that updates load balancing and broadcasts changes
@@ -201,4 +297,54 @@ async fn spam_message_task(state: Arc<AppState>) {
             arc.read().send_datagram(pkt.clone());
         });
     }
+}
+
+/// Decode a hex string into bytes (even length, valid hex), or `None` otherwise.
+fn decode_hash(hex: &str) -> Option<Vec<u8>> {
+    let hex = hex.trim();
+    if hex.is_empty() || hex.len() % 2 != 0 {
+        return None;
+    }
+
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).ok())
+        .collect()
+}
+
+/// Parse a world identifier string (`"[type:]id[?v=version][@address]"`) into a `World`.
+fn parse_world_identifier(raw: &str) -> Option<crate::instance::world::World> {
+    let mut rest = raw.trim();
+
+    let address = match rest.rsplit_once('@') {
+        Some((before, addr)) => {
+            rest = before;
+            addr.to_string()
+        }
+        None => String::new(),
+    };
+
+    let mut version = 0u16;
+    if let Some((before, query)) = rest.split_once('?') {
+        rest = before;
+        for kv in query.split('&') {
+            if let Some(v) = kv.strip_prefix("v=") {
+                version = v.parse().unwrap_or(version);
+            }
+        }
+    }
+
+    // Drop an optional single-char `type:` prefix.
+    let id = match rest.split_once(':') {
+        Some((t, id)) if t.len() == 1 => id,
+        _ => rest,
+    };
+
+    let master_id = id.parse::<u32>().ok()?;
+    let address = if address.is_empty() {
+        crate::constants::SAFE_LOCAL_ADDRESS.to_string()
+    } else {
+        address
+    };
+    Some(crate::instance::world::World::new(master_id, address, version))
 }

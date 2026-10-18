@@ -3,3 +3,4 @@ mod disconnect_tests;
 mod handshake_tests;
 pub mod helpers;
 mod latency_tests;
+mod shutdown_tests;

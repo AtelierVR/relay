@@ -30,6 +30,12 @@ pub struct Config {
     #[serde(default)]
     pub token: String,
 
+    /// Instances to self-host in standalone mode (empty `node_address`). Each entry creates one
+    /// relay instance; when `world` is set, clients download that bundle (travel `UseBundle`).
+    /// When empty, a single default (unlimited-capacity) instance is created.
+    #[serde(default)]
+    pub instances: Vec<InstanceConfig>,
+
     /// Maximum number of instances this relay will host.
     #[serde(default = "default_max_instances")]
     pub max_instances: u8,
@@ -54,6 +60,40 @@ pub struct Config {
     /// Load balancing configuration.
     #[serde(default)]
     pub load_balancing: LoadBalancingConfig,
+}
+
+/// Definition of an instance self-hosted by a standalone relay.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstanceConfig {
+    /// Maximum player count (0 = unlimited).
+    #[serde(default)]
+    pub capacity: u16,
+    /// Optional instance password.
+    #[serde(default)]
+    pub password: Option<String>,
+    /// Optional world served to clients (downloaded from `url`).
+    #[serde(default)]
+    pub world: Option<WorldConfig>,
+}
+
+/// World served by a standalone instance.
+/// Either a download bundle (`{ "url", "hash", "size" }`, fetched by the client: travel `UseBundle`)
+/// or a world identifier string (`"w:123?v=5@host"`, resolved through the client's node: `UseNode`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum WorldConfig {
+    /// World identifier string, e.g. `"123?v=5@example.com"` or `"w:123@example.com"`.
+    Identifier(String),
+    /// Download bundle the client fetches itself.
+    Bundle {
+        /// Bundle download URL.
+        url: String,
+        /// Hex-encoded 32-byte bundle hash.
+        hash: String,
+        /// Bundle size in bytes (0 = unknown).
+        #[serde(default)]
+        size: u32,
+    },
 }
 
 /// Configuration for adaptive load balancing.
@@ -129,6 +169,12 @@ impl Config {
             .merge(Env::prefixed("NOX_").map(|k| k.as_str().to_lowercase().into()))
             .extract()?;
         Ok(cfg)
+    }
+
+    /// Standalone mode: no master node is configured (`node_address` empty). The relay then
+    /// self-hosts a default instance instead of connecting to the master server.
+    pub fn is_standalone(&self) -> bool {
+        self.node_address.is_empty()
     }
 }
 

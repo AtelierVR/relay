@@ -194,6 +194,34 @@ async fn on_resolve_challenge(packet: &mut Packet, mut r: PacketReader) {
     let server = r.read_string().unwrap_or_default();
     let fingerprint = sha256_fingerprint(&public_key);
 
+    // Standalone (no master node): the verified key is trusted as its own identity.
+    if packet.state.config.is_standalone() {
+        let user = User {
+            id: user_id,
+            display_name: format!("user{user_id}"),
+            address: server.clone(),
+        };
+        if let Some(arc) = packet.state.clients.get(client_id) {
+            let mut c = arc.write();
+            c.user = Some(user.clone());
+            c.auth_state = AuthState::Authenticated;
+        }
+        info!(
+            "[Auth] client {} authenticated (standalone): user={}@{}",
+            client_id, user.id, user.address
+        );
+        let mut w = PacketWriter::new();
+        w.write_u8(AuthResult::Success as u8);
+        w.write_u32(user.id);
+        w.write_string(&user.address);
+        w.write_string(&user.display_name);
+        return packet.reply_raw(encode_stream_packet(
+            uid,
+            PacketType::Authentication,
+            w.finish().as_ref(),
+        ));
+    }
+
     let resolve = match packet
         .state
         .master
