@@ -9,6 +9,7 @@ mod debug;
 mod help;
 mod instances;
 mod memory;
+mod players;
 mod restart;
 mod status;
 mod stop;
@@ -22,6 +23,7 @@ pub use debug::DebugCommand;
 pub use help::HelpCommand;
 pub use instances::InstancesCommand;
 pub use memory::MemoryCommand;
+pub use players::PlayersCommand;
 pub use restart::RestartCommand;
 pub use status::StatusCommand;
 pub use stop::StopCommand;
@@ -94,6 +96,26 @@ pub struct CommandRegistry {
     commands: Vec<Box<dyn Command + Send + Sync>>,
 }
 
+/// Current Unix timestamp in milliseconds.
+pub(crate) fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64
+}
+
+/// Human-readable age of a Unix millisecond timestamp: `12s`, `3m04s`, `1h02m`.
+pub(crate) fn format_age_ms(ms: i64) -> String {
+    let secs = ms.max(0) / 1000;
+    if secs < 60 {
+        format!("{secs}s")
+    } else if secs < 3600 {
+        format!("{}m{:02}s", secs / 60, secs % 60)
+    } else {
+        format!("{}h{:02}m", secs / 3600, (secs % 3600) / 60)
+    }
+}
+
 impl CommandRegistry {
     pub fn new(mut context: CommandContext) -> Self {
         // Create commands without context
@@ -113,6 +135,7 @@ impl CommandRegistry {
             Box::new(UseCommand),
             Box::new(TpsCommand),
             Box::new(ThresholdCommand),
+            Box::new(PlayersCommand),
         ];
 
         // Extract command metadata
