@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "High-performance QUIC relay server for the Nox platform",
   "scripts": {
-    "dev": "cargo build && ./target/debug/noxrelay",
+    "dev": "cargo run",
     "build": "cargo build --release",
     "test": "cargo test",
     "format": "cargo fmt --all",
