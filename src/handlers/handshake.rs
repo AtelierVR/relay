@@ -20,6 +20,28 @@ use crate::{
 enum HandshakeFlags {
     None = 0,
     IsOffline = 1 << 0,
+    /// The transfer token was accepted: the client is already authenticated.
+    Transferred = 1 << 1,
+    /// The response carries the room a client should join when it has no valid target.
+    AutoRoom = 1 << 2,
+}
+
+/// Room a client should join by default, when it has no valid target of its own.
+///
+/// A relay hosting a single room always sends clients there (standalone relays, which have nothing
+/// to pick). Otherwise the first room flagged `hub` in the config is the default, which lets a relay
+/// force its clients onto a public hub.
+fn auto_room(state: &AppState) -> Option<u8> {
+    let mut ids = Vec::new();
+    state.instances.for_each(|id, _| ids.push(id));
+
+    if ids.len() == 1 {
+        return ids.first().copied();
+    }
+
+    let index = state.config.instances.iter().position(|spec| spec.hub)?;
+    let id = u8::try_from(index).ok()?;
+    state.instances.get(id).is_some().then_some(id)
 }
 
 pub fn handle(mut packet: Packet) {
@@ -48,6 +70,35 @@ pub fn handle_inner(state: &Arc<AppState>, client_id: u16, uid: u16, payload: By
     let engine = r.read_string().unwrap_or_default();
     let platform = r.read_string().unwrap_or_default();
 
+    // Optional trailing transfer token (empty for a normal connection). When the token can be
+    // resolved, the client is authenticated immediately and skips the challenge-response below.
+    let transfer_token = r.read_bytes_prefixed();
+    let transferred = if transfer_token.is_empty() {
+        None
+    } else {
+        match crate::transfer::consume(state, &transfer_token) {
+            Some(result) => {
+                info!(
+                    "[Handshake] client {} transferred as user={}@{} display={} (from={})",
+                    client_id,
+                    result.user.id,
+                    result.user.address,
+                    result.user.display_name,
+                    result.from
+                );
+                Some(result)
+            }
+            None => {
+                warn!(
+                    "[Handshake] client {}: unresolved transfer token ({} bytes), falling back to authentication",
+                    client_id,
+                    transfer_token.len()
+                );
+                None
+            }
+        }
+    };
+
     info!("[Handshake] client {client_id}: engine=\"{engine}\" platform=\"{platform}\"");
 
     // Update client state.
@@ -56,7 +107,14 @@ pub fn handle_inner(state: &Arc<AppState>, client_id: u16, uid: u16, payload: By
         c.engine = engine.clone();
         c.platform = platform.clone();
         c.from = format!("{}:{}", address, port);
-        c.auth_state = AuthState::Handshaked;
+        c.auth_state = if transferred.is_some() {
+            AuthState::Authenticated
+        } else {
+            AuthState::Handshaked
+        };
+        if let Some(result) = &transferred {
+            c.user = Some(result.user.clone());
+        }
     }
 
     // Notify the master server that a client has connected (platform/engine now known).
@@ -95,11 +153,17 @@ pub fn handle_inner(state: &Arc<AppState>, client_id: u16, uid: u16, payload: By
 
     let master_addr = &state.config.node_address;
     let has_master = !master_addr.is_empty();
-    let flags: u8 = if has_master {
-        HandshakeFlags::None as u8
-    } else {
-        HandshakeFlags::IsOffline as u8
-    };
+    let auto_room = auto_room(state);
+    let mut flags = 0u8;
+    if !has_master {
+        flags |= HandshakeFlags::IsOffline as u8;
+    }
+    if transferred.is_some() {
+        flags |= HandshakeFlags::Transferred as u8;
+    }
+    if auto_room.is_some() {
+        flags |= HandshakeFlags::AutoRoom as u8;
+    }
     w.write_u8(flags);
     if has_master {
         w.write_string(master_addr);
@@ -108,6 +172,10 @@ pub fn handle_inner(state: &Arc<AppState>, client_id: u16, uid: u16, payload: By
     w.write_u16(crate::constants::MAX_PACKET_SIZE as u16);
     w.write_u16(state.config.connection_timeout);
     w.write_u16(state.config.keep_alive_interval);
+
+    if let Some(iid) = auto_room {
+        w.write_u8(iid);
+    }
 
     encode_stream_packet(uid, PacketType::Handshake, w.finish().as_ref())
 }

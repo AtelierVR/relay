@@ -32,6 +32,25 @@ pub enum TransformType {
     EntityPart = 1,
 }
 
+/// Payload offsets of the fields that identify a transform packet.
+const OFF_IID: usize = 0;
+const OFF_ENTITY: usize = 2;
+const OFF_PART: usize = 6;
+
+/// Rate bucket key of an `EntityPart` transform: `[iid][sub-type][entity: u32][part: u16]` → one
+/// budget per (entity, part), the sub-type byte being skipped as it is constant per branch.
+#[inline]
+fn entity_part_key(packet: &Packet) -> u64 {
+    crate::rate::key(packet, &[(OFF_IID, 1), (OFF_ENTITY, 4), (OFF_PART, 2)])
+}
+
+/// Rate bucket key of a `ByPath` transform: **one budget for all paths** (they are a debug/editor
+/// channel, not the per-part traffic of an avatar).
+#[inline]
+fn path_key(packet: &Packet) -> u64 {
+    crate::rate::key(packet, &[(OFF_IID, 1)])
+}
+
 pub async fn handle(packet: Packet) {
     let state = &packet.state;
     let client_id = packet.client_id();
@@ -40,23 +59,36 @@ pub async fn handle(packet: Packet) {
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();
-    let inst_arc = match state.instances.get(iid) {
-        Some(a) => a,
-        None => {
-            debug!(
-                "[Transform] unknown instance {} from client {}",
-                iid, client_id
-            );
+    let sub_type = r.read_u8();
+
+    // Meter first, before any room/player/entity lookup: a flood must cost almost nothing. The key
+    // is the packet head, so no parsing is needed: `[iid][sub][entity][part]` for an EntityPart,
+    // `[iid][sub][path…]` for a ByPath (each part / each path gets its own budget).
+    let key = match sub_type {
+        x if x == TransformType::EntityPart as u8 => entity_part_key(&packet),
+        x if x == TransformType::ByPath as u8 => path_key(&packet),
+        _ => {
+            debug!("[Transform] unknown sub-type {sub_type} from client {client_id}");
             return;
         }
     };
 
-    let sub_type = r.read_u8();
+    if !crate::rate::check(state, client_id, key) {
+        return;
+    }
+
+    let inst_arc = match state.instances.get(iid) {
+        Some(a) => a,
+        None => {
+            debug!("[Transform] unknown instance {iid} from client {client_id}");
+            return;
+        }
+    };
 
     match sub_type {
         x if x == TransformType::EntityPart as u8 => on_entity_part(&packet, iid, inst_arc, r),
         x if x == TransformType::ByPath as u8 => on_by_path(&packet, iid, inst_arc, r),
-        _ => debug!("[Transform] unknown sub-type {}", sub_type),
+        _ => debug!("[Transform] unknown sub-type {sub_type}"),
     }
 }
 
@@ -119,6 +151,8 @@ fn on_entity_part(
     let flags = TransformFlags::from_bits_truncate(r.read_u8());
     let active_flags = flags & !TransformFlags::RESET;
     let is_reset = flags.contains(TransformFlags::RESET);
+
+    // Metered by `handle` (see `entity_part_key`).
 
     // Get or default the existing transform: a player and a networked entity both store one per
     // rig part (the flags telling which fields were ever sent are kept alongside).
@@ -203,6 +237,8 @@ fn on_by_path(
             return;
         }
     };
+
+    // Metered by `handle` (see `path_key`: all paths share one budget).
 
     let flags = TransformFlags::from_bits_truncate(r.read_u8());
     let mut tr = Transform::default();

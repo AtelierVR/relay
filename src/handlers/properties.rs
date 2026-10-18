@@ -23,9 +23,20 @@ use crate::{
     },
 };
 
+/// Rate bucket key of a `Properties` packet: `[iid][entity: u32]` → one budget per entity.
+#[inline]
+fn entity_key(packet: &Packet) -> u64 {
+    crate::rate::key(packet, &[(0, 5)])
+}
+
 pub async fn handle(packet: Packet) {
     let state = &packet.state;
     let client_id = packet.client_id();
+    // Meter per entity (`[iid][entity]`) before any lookup.
+    if !crate::rate::check(state, client_id, entity_key(&packet)) {
+        return;
+    }
+
     let payload = packet.payload.clone();
     let mut r = PacketReader::new(payload);
 

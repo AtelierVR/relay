@@ -71,13 +71,32 @@ pub async fn handle(mut packet: Packet) {
     let allow_no_auth = state.config.debug && is_bot;
 
     // Must be authenticated (unless bot in debug mode).
-    let _client_arc = match state.clients.get(client_id) {
+    let client_arc = match state.clients.get(client_id) {
         Some(a) if a.read().is_authenticated() || allow_no_auth => a,
         _ => {
             debug!("[Enter] client {client_id} attempted to enter instance {iid} but is not authenticated");
             return;
         }
     };
+
+    // A pending transfer binds the client to its target: it cannot stay in (or come back to) another
+    // room while it is supposed to move. This is what makes the request authoritative for a client
+    // that would rather not comply.
+    if let Some(target) = state
+        .clients
+        .get(client_id)
+        .and_then(|arc| arc.read().pending_transfer.clone())
+        .and_then(|pending| pending.target)
+    {
+        if iid != target {
+            return packet.reply_raw(make_error(
+                uid,
+                iid,
+                EnterResult::Refused,
+                Some(&format!("You are being moved to room {target}.")),
+            ));
+        }
+    }
 
     debug!(
         "[Enter] client {client_id} → instance {iid}{}",
@@ -178,6 +197,13 @@ pub async fn handle(mut packet: Packet) {
     {
         let mut inst = inst_arc.write();
         inst.add_player(player);
+    }
+
+    // The client now belongs to this room: its rate budget follows the room's TPS.
+    {
+        let mut c = client_arc.write();
+        c.room = Some(iid);
+        crate::rate::reset(&mut c);
     }
 
     // Log player entering with user info

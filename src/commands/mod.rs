@@ -1,5 +1,8 @@
 use crate::{
-    client::ClientManager, config::Config, handlers::context::AppState, instance::InstanceManager,
+    client::{client::ArcClient, ClientManager},
+    config::Config,
+    handlers::context::AppState,
+    instance::InstanceManager,
 };
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -9,10 +12,14 @@ mod debug;
 mod help;
 mod instances;
 mod memory;
+// `move` is a Rust keyword: the module needs a raw identifier.
+#[path = "move.rs"]
+mod r#move;
 mod players;
 mod restart;
 mod status;
 mod stop;
+mod transfer;
 mod tps;
 mod uptime;
 mod use_instance;
@@ -23,10 +30,12 @@ pub use debug::DebugCommand;
 pub use help::HelpCommand;
 pub use instances::InstancesCommand;
 pub use memory::MemoryCommand;
+pub use r#move::MoveCommand;
 pub use players::PlayersCommand;
 pub use restart::RestartCommand;
 pub use status::StatusCommand;
 pub use stop::StopCommand;
+pub use transfer::TransferCommand;
 pub use tps::{ThresholdCommand, TpsCommand};
 pub use uptime::UptimeCommand;
 pub use use_instance::UseCommand;
@@ -96,6 +105,30 @@ pub struct CommandRegistry {
     commands: Vec<Box<dyn Command + Send + Sync>>,
 }
 
+/// Resolve a client by numeric id first, then by `ip:port` (remote address or the address it
+/// declared in its handshake).
+pub(crate) fn find_client(context: &CommandContext, query: &str) -> Option<(u16, ArcClient)> {
+    if let Ok(id) = query.parse::<u16>() {
+        if let Some(client) = context.clients.get(id) {
+            return Some((id, client));
+        }
+    }
+
+    let mut found = None;
+    context.clients.for_each(|id, client| {
+        if found.is_some() {
+            return;
+        }
+
+        let cli = client.read();
+        if cli.address == query || cli.from == query {
+            found = Some((id, ArcClient::clone(client)));
+        }
+    });
+
+    found
+}
+
 /// Current Unix timestamp in milliseconds.
 pub(crate) fn now_ms() -> i64 {
     std::time::SystemTime::now()
@@ -136,6 +169,8 @@ impl CommandRegistry {
             Box::new(TpsCommand),
             Box::new(ThresholdCommand),
             Box::new(PlayersCommand),
+            Box::new(MoveCommand),
+            Box::new(TransferCommand),
         ];
 
         // Extract command metadata

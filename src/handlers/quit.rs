@@ -259,6 +259,13 @@ pub fn leave_all_instances(state: &AppState, client_id: u16) {
             },
         );
     }
+
+    // The client is roomless: its rate budget must follow.
+    if let Some(arc) = state.clients.get(client_id) {
+        let mut c = arc.write();
+        c.room = None;
+        crate::rate::reset(&mut c);
+    }
 }
 
 fn make_quit_response(uid: u16, iid: u8, quit_type: QuitType, reason: Option<&str>) -> Bytes {

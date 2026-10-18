@@ -61,6 +61,12 @@ impl TryFrom<u8> for StreamSubType {
     }
 }
 
+/// Rate bucket key of a `Stream` packet: `[iid][sub-type][channel/ids]` → one budget per channel.
+#[inline]
+fn channel_key(packet: &Packet) -> u64 {
+    crate::rate::key(packet, &[(0, 1), (2, 4)])
+}
+
 pub async fn handle(packet: Packet) {
     let state = &packet.state;
     let client_id = packet.client_id();
@@ -68,6 +74,12 @@ pub async fn handle(packet: Packet) {
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();
+
+    // Meter per channel (`[iid][sub-type][channel/ids]`), before any lookup, at the room TPS.
+    if !crate::rate::check(state, client_id, channel_key(&packet)) {
+        return;
+    }
+
     let inst_arc = match state.instances.get(iid) {
         Some(a) => a,
         None => {

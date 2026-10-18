@@ -35,12 +35,22 @@ enum PlayerUpdateResult {
     Change = 2,
 }
 
-pub async fn handle(mut packet: Packet) {
-    let state = packet.state.clone();
+/// Rate bucket key of a `PlayerUpdate` packet: `[iid][pid: u32]` → one budget per player.
+#[inline]
+fn player_key(packet: &Packet) -> u64 {
+    crate::rate::key(packet, &[(0, 5)])
+}
+
+pub async fn handle(mut packet: Packet) {    let state = packet.state.clone();
     let client_id = packet.client_id();
     let uid = packet.uid;
-    let payload = packet.payload.clone();
 
+    // Meter per player (`[iid][pid]`) before any lookup.
+    if !crate::rate::check(&state, client_id, player_key(&packet)) {
+        return;
+    }
+
+    let payload = packet.payload.clone();
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();

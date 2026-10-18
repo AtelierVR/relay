@@ -1,5 +1,4 @@
-use super::{format_age_ms, now_ms, Command, CommandContext};
-use crate::client::client::ArcClient;
+use super::{find_client, format_age_ms, now_ms, Command, CommandContext};
 use tracing::{info, warn};
 
 /// `clients` — list every connected client, `clients <id|ip:port>` — details of one.
@@ -94,28 +93,14 @@ fn show_client(context: &CommandContext, query: &str) {
         cli.conn.remote_address(),
         cli.conn.rtt().as_millis()
     );
-}
-
-/// Resolve a client by numeric id first, then by `ip:port` (remote address or the address it
-/// declared in its handshake).
-fn find_client(context: &CommandContext, query: &str) -> Option<(u16, ArcClient)> {
-    if let Ok(id) = query.parse::<u16>() {
-        if let Some(client) = context.clients.get(id) {
-            return Some((id, client));
+    info!(
+        "  Room:            {}",
+        match cli.room {
+            Some(iid) => format!("{iid}"),
+            None => String::from("none"),
         }
-    }
+    );
 
-    let mut found = None;
-    context.clients.for_each(|id, client| {
-        if found.is_some() {
-            return;
-        }
-
-        let cli = client.read();
-        if cli.address == query || cli.from == query {
-            found = Some((id, ArcClient::clone(client)));
-        }
-    });
-
-    found
+    let dropped = cli.limits.dropped;
+    info!("  Over budget:     {dropped} dropped packet(s)");
 }

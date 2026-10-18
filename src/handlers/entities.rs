@@ -27,9 +27,21 @@ const OP_UPDATE: u8 = 1;
 const OP_REMOVE: u8 = 2;
 const OP_SYNC: u8 = 4;
 
+/// Rate bucket key of an `Entities` packet: `[iid][op]` → one budget per operation.
+#[inline]
+fn op_key(packet: &Packet) -> u64 {
+    crate::rate::key(packet, &[(0, 2)])
+}
+
 pub async fn handle(packet: Packet) {
     let state = &packet.state;
     let client_id = packet.client_id();
+
+    // Meter per operation (`[iid][op]`) before any lookup.
+    if !crate::rate::check(state, client_id, op_key(&packet)) {
+        return;
+    }
+
     let mut r = PacketReader::new(packet.payload.clone());
 
     let iid = r.read_u8();

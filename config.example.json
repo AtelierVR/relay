@@ -3,6 +3,11 @@
   "node_gateway": "http://localhost:3042",
   "use_address": "127.0.0.1:23032",
   "token": "",
+  "transfer_timeout": 15,
+  "rate_limit": {
+    "enabled": true,
+    "burst_ms": 250
+  },
   "max_instances": 3,
   "connection_timeout": 15,
   "keep_alive_interval": 5,

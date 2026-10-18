@@ -30,6 +30,12 @@ pub struct Config {
     #[serde(default)]
     pub token: String,
 
+    /// Seconds a client has to comply with a `Transfer` (leave the relay, or change room) before
+    /// the relay enforces it: the client is removed from its rooms and disconnected. 0 disables
+    /// the enforcement (the client is only asked, never forced).
+    #[serde(default = "default_transfer_timeout")]
+    pub transfer_timeout: u16,
+
     /// Instances to self-host in standalone mode (empty `node_address`). Each entry creates one
     /// relay instance; when `world` is set, clients download that bundle (travel `UseBundle`).
     /// When empty, a single default (unlimited-capacity) instance is created.
@@ -60,12 +66,15 @@ pub struct Config {
     /// Load balancing configuration.
     #[serde(default)]
     pub load_balancing: LoadBalancingConfig,
+
+    /// Per-client rate limiting (see `rate.rs`).
+    #[serde(default)]
+    pub rate_limit: RateLimitConfig,
 }
 
 /// Definition of an instance self-hosted by a standalone relay.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InstanceConfig {
-    /// Maximum player count (0 = unlimited).
+pub struct InstanceConfig {    /// Maximum player count (0 = unlimited).
     #[serde(default)]
     pub capacity: u16,
     /// Optional instance password.
@@ -74,6 +83,10 @@ pub struct InstanceConfig {
     /// Optional world served to clients (downloaded from `url`).
     #[serde(default)]
     pub world: Option<WorldConfig>,
+    /// Default instance of the relay: clients that have no valid target of their own are sent
+    /// here (e.g. a public "hub"). Only the first flagged instance is used.
+    #[serde(default)]
+    pub hub: bool,
 }
 
 /// World served by a standalone instance.
@@ -94,6 +107,30 @@ pub enum WorldConfig {
         #[serde(default)]
         size: u32,
     },
+}
+
+/// Per-client rate limiting (see `rate.rs`).
+///
+/// A player is expected to send its transforms at the instance TPS, one packet per part per tick.
+/// The relay meters each client and drops what exceeds its budget instead of disconnecting it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RateLimitConfig {
+    /// Enable the metering (disabled = every packet is accepted).
+    #[serde(default = "default_rate_limit_enabled")]
+    pub enabled: bool,
+
+    /// Jitter margin in milliseconds: how much a stalled client may catch up in one burst.
+    #[serde(default = "default_rate_limit_burst_ms")]
+    pub burst_ms: u16,
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self {
+            enabled: DEFAULT_RATE_LIMIT_ENABLED,
+            burst_ms: DEFAULT_RATE_LIMIT_BURST_MS,
+        }
+    }
 }
 
 /// Configuration for adaptive load balancing.
@@ -187,6 +224,9 @@ fn default_node_gateway() -> String {
 fn default_node_address() -> String {
     DEFAULT_NODE_ADDRESS.to_owned()
 }
+fn default_transfer_timeout() -> u16 {
+    DEFAULT_TRANSFER_TIMEOUT
+}
 fn default_max_instances() -> u8 {
     DEFAULT_MAX_INSTANCES
 }
@@ -198,6 +238,13 @@ fn default_keep_alive_interval() -> u16 {
 }
 fn default_property_resend_interval() -> u8 {
     DEFAULT_PROPERTY_RESEND_INTERVAL
+}
+
+fn default_rate_limit_enabled() -> bool {
+    DEFAULT_RATE_LIMIT_ENABLED
+}
+fn default_rate_limit_burst_ms() -> u16 {
+    DEFAULT_RATE_LIMIT_BURST_MS
 }
 
 fn default_lb_enabled() -> bool {

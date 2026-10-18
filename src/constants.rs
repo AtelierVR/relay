@@ -1,5 +1,5 @@
 // Protocol and server constants.
-pub const PROTOCOL_VERSION: u16 = 2;
+pub const PROTOCOL_VERSION: u16 = 3;
 pub const ENGINE: &str = "nox";
 pub const VERSION: &str = "0.1.0";
 
@@ -24,6 +24,13 @@ pub const DGRAM_HEADER_SIZE: usize = 5; // [Length: u16][UID: u16][Type: u8] —
 // Session timeouts (seconds).
 pub const DEFAULT_CONNECTION_TIMEOUT: u16 = 15;
 pub const DEFAULT_KEEP_ALIVE_INTERVAL: u16 = 5;
+/// Seconds a client has to comply with a `Transfer` before the relay forces it out.
+pub const DEFAULT_TRANSFER_TIMEOUT: u16 = 15;
+
+// Rate limiting defaults (see `rate.rs`).
+pub const DEFAULT_RATE_LIMIT_ENABLED: bool = true;
+/// Margin given to a client that was stalled (lag spike, GC, packet loss): how much it may catch up.
+pub const DEFAULT_RATE_LIMIT_BURST_MS: u16 = 250;
 /// Interval (seconds) at which the server asks clients to re-send unchanged LocalEmit properties.
 /// 0 = feature disabled.
 pub const DEFAULT_PROPERTY_RESEND_INTERVAL: u8 = 5;

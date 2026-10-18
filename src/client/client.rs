@@ -35,6 +35,19 @@ pub enum AuthState {
     Authenticated,
 }
 
+/// A `Transfer` the relay asked this client for and that it has not applied yet.
+///
+/// The packet itself is only a request: the client owns its connection, so the relay can merely
+/// tell it to leave/change room. This record is what makes the request authoritative — when the
+/// deadline passes, the client is removed from its rooms and disconnected.
+#[derive(Debug, Clone)]
+pub struct PendingTransfer {
+    /// Room the client must join, `None` when it must leave this relay entirely.
+    pub target: Option<u8>,
+    /// When the client stops being compliant.
+    pub deadline: Instant,
+}
+
 /// A connected QUIC client.
 #[derive(Debug)]
 pub struct Client {
@@ -62,6 +75,12 @@ pub struct Client {
     pub tx: mpsc::Sender<Bytes>,
     /// QUIC connection for sending datagrams.
     pub conn: Arc<Connection>,
+    /// Pending `Transfer` request, enforced after the configured timeout.
+    pub pending_transfer: Option<PendingTransfer>,
+    /// Room the client currently plays in, if any (drives its rate budget).
+    pub room: Option<u8>,
+    /// Per-class packet budgets (see `rate.rs`).
+    pub limits: crate::rate::RateLimits,
 }
 
 impl Client {
@@ -83,6 +102,9 @@ impl Client {
             auth_state: AuthState::None,
             tx,
             conn,
+            pending_transfer: None,
+            room: None,
+            limits: crate::rate::RateLimits::default(),
         }
     }
 

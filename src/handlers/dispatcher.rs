@@ -9,9 +9,9 @@ use tracing::{debug, warn};
 use crate::proto::packet_type::PacketType;
 
 use super::{
-    auth, avatar_changed, custom, disconnect, entities, enter, event, handshake, latency,
-    message, packet::Packet, player_update, properties, quit, reliable, server_config, sessions,
-    stream, teleport, transform, traveling,
+    auth, avatar_changed, custom, disconnect, enter, entities, event, handshake, latency, message,
+    packet::Packet, player_update, properties, quit, reliable, server_config, sessions, stream,
+    teleport, transform, traveling,
 };
 
 /// Packets that should not be logged (too frequent or low-value)
@@ -73,7 +73,7 @@ pub async fn dispatch(packet: Packet) {
                 ptype
             );
         }
-        PacketType::Join | PacketType::Leave => {
+        PacketType::Join | PacketType::Leave | PacketType::Transfer => {
             warn!(
                 "[{}] client {}: server-only packet {:?}",
                 if is_stream { "Stream" } else { "Datagram" },

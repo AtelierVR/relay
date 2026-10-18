@@ -14,9 +14,21 @@ use crate::{
     },
 };
 
+/// Rate bucket key of an `Event` packet: `[iid][name: i64]` → one budget per event name.
+#[inline]
+fn event_key(packet: &Packet) -> u64 {
+    crate::rate::key(packet, &[(0, 9)])
+}
+
 pub async fn handle(packet: Packet) {
     let state = &packet.state;
     let client_id = packet.client_id();
+
+    // Meter per event name (`[iid][name]`) before any lookup.
+    if !crate::rate::check(state, client_id, event_key(&packet)) {
+        return;
+    }
+
     let payload = packet.payload.clone();
     let mut r = PacketReader::new(payload);
 
