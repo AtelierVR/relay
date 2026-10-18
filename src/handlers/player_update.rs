@@ -44,7 +44,7 @@ pub async fn handle(mut packet: Packet) {
     let mut r = PacketReader::new(payload);
 
     let iid = r.read_u8();
-    let pid = r.read_u16();
+    let pid = r.read_u32();
 
     let inst_arc = match state.instances.get(iid) {
         Some(a) => a,
@@ -150,7 +150,7 @@ fn build_update_packet(
     uid: u16,
     iid: u8,
     result: PlayerUpdateResult,
-    pid: u16,
+    pid: u32,
     flags: PlayerUpdateFlags,
     display: Option<&str>,
     player_flags: u32,
@@ -158,7 +158,7 @@ fn build_update_packet(
     let mut w = PacketWriter::new();
     w.write_u8(iid);
     w.write_u8(result as u8);
-    w.write_u16(pid);
+    w.write_u32(pid);
     w.write_u8(flags.bits());
     if flags.contains(PlayerUpdateFlags::DISPLAY_NAME) {
         w.write_string(display.unwrap_or(""));

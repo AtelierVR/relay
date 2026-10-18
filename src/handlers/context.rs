@@ -159,7 +159,7 @@ pub fn broadcast_instance(state: &AppState, instance_id: u8, packet: Bytes, excl
 pub fn broadcast_visible(
     state: &AppState,
     instance_id: u8,
-    target_player_id: u16,
+    target_player_id: u32,
     packet: Bytes,
     exclude: Option<u16>,
 ) {

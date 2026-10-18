@@ -127,7 +127,7 @@ pub struct SyncInstanceData {
     pub password: Option<String>,
     pub capacity: u16,
     pub player_count: usize,
-    pub world: String,
+    pub world: WorldInfo,
     pub flags: String,
 }
 
@@ -192,7 +192,7 @@ pub struct EventClientDisconnected {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventPlayerJoin {
     pub client_id: u16,
-    pub player_id: u16,
+    pub player_id: u32,
     pub display: String,
     /// Relay-internal instance slot (0–254).
     pub internal_id: u8,
@@ -204,7 +204,7 @@ pub struct EventPlayerJoin {
 /// Emitted to the node when a player leaves an instance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventPlayerLeave {
-    pub player_id: u16,
+    pub player_id: u32,
     /// Relay-internal instance slot (0–254).
     pub internal_id: u8,
     /// Quit type ("normal", "timeout", "moderation_kick", "vote_kick", "configuration_error", "unknown_error").
@@ -351,20 +351,55 @@ pub struct InstanceInfo {
     pub effective_threshold: f32,
 }
 
+/// World attached to an instance, tagged by `"type"` so each kind only carries its own fields.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorldInfo {
-    #[serde(rename = "i")]
-    pub master_id: u32,
-    #[serde(rename = "s")]
-    pub server: String,
-    #[serde(rename = "v")]
-    pub version: u16,
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum WorldInfo {
+    /// World resolved through a master node (`UseNode`).
+    Node {
+        #[serde(rename = "i")]
+        master_id: u32,
+        /// Deploy address of the world.
+        #[serde(rename = "s")]
+        server: String,
+        #[serde(rename = "v")]
+        version: u16,
+    },
+    /// World downloaded by the client from a bundle (`UseBundle`).
+    Bundle {
+        /// Bundle download URL.
+        #[serde(rename = "u")]
+        url: String,
+        /// Hex-encoded 32-byte bundle hash.
+        #[serde(rename = "h")]
+        hash: String,
+        /// Bundle size in bytes (0 = unknown).
+        #[serde(rename = "s")]
+        size: u32,
+    },
+}
+
+impl From<&crate::instance::TravelTarget> for WorldInfo {
+    fn from(target: &crate::instance::TravelTarget) -> Self {
+        match target {
+            crate::instance::TravelTarget::Node(w) => WorldInfo::Node {
+                master_id: w.master_id,
+                server: w.address.clone(),
+                version: w.version,
+            },
+            crate::instance::TravelTarget::Bundle(b) => WorldInfo::Bundle {
+                url: b.url.clone(),
+                hash: hex::encode(&b.hash),
+                size: b.size,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerInfo {
     #[serde(rename = "i")]
-    pub id: u16,
+    pub id: u32,
     #[serde(rename = "c")]
     pub client_id: u16,
     #[serde(rename = "d")]

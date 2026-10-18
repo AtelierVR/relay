@@ -2,7 +2,7 @@
 ///
 /// Values 0x00–0x0F are bidirectional (client ↔ server).
 /// Values 0x10–0x11 are server-initiated broadcasts.
-/// Values 0x12–0x15 are bidirectional.
+/// Values 0x12–0x16 are bidirectional.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PacketType {
@@ -28,6 +28,7 @@ pub enum PacketType {
     Sessions = 0x13,
     Stream = 0x14,
     Event = 0x15,
+    Entities = 0x16,
 }
 
 impl TryFrom<u8> for PacketType {
@@ -57,6 +58,7 @@ impl TryFrom<u8> for PacketType {
             0x13 => Ok(Self::Sessions),
             0x14 => Ok(Self::Stream),
             0x15 => Ok(Self::Event),
+            0x16 => Ok(Self::Entities),
             other => Err(other),
         }
     }

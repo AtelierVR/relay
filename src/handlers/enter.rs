@@ -6,7 +6,7 @@
 /// (InstanceFlags.UsePassword ? [Password: string])
 /// ```
 /// Response (Success):
-/// [iid: u8][EnterResult: u8][PlayerFlags: u32][PlayerId: u16]
+/// [iid: u8][EnterResult: u8][PlayerFlags: u32][PlayerId: u32]
 /// [UserId: u32][UserAddress: string][Display: string][CreatedAt: i64]
 /// [Tps: u8][Threshold: f32][RenderEntity: f32][PropertyResendInterval: u8]
 ///
@@ -167,7 +167,7 @@ pub async fn handle(mut packet: Packet) {
     }
 
     // Create the player.
-    let player_id = inst_arc.read().next_player_id();
+    let player_id = inst_arc.read().next_entity_id();
     let mut player = Player::new(player_id, client_id, iid);
     player.flags = p_flags;
     player.status = PlayerStatus::Preparing;
@@ -241,7 +241,7 @@ pub async fn handle(mut packet: Packet) {
 fn build_enter_response(
     packet: &mut Packet,
     inst_arc: std::sync::Arc<parking_lot::RwLock<crate::instance::Instance>>,
-    player_id: u16,
+    player_id: u32,
 ) {
     let client_id = packet.client_id();
     let uid = packet.uid;
@@ -290,7 +290,7 @@ fn build_enter_response(
     w.write_u8(inst.internal_id);
     w.write_u8(EnterResult::Success as u8);
     w.write_u32(player.flags.bits());
-    w.write_u16(player.id);
+    w.write_u32(player.id);
     w.write_u32(user_id);
     w.write_string(&user_addr);
     w.write_string(&display);
@@ -310,7 +310,7 @@ fn build_enter_response(
 fn broadcast_join(
     state: &AppState,
     entering_client_id: u16,
-    entering_player_id: u16,
+    entering_player_id: u32,
     inst_arc: &std::sync::Arc<parking_lot::RwLock<crate::instance::Instance>>,
 ) {
     // Build the Join packet for the entering player.
@@ -347,7 +347,7 @@ fn broadcast_join(
         let mut w = PacketWriter::new();
         w.write_u8(inst.internal_id);
         w.write_u32(player.flags.bits());
-        w.write_u16(player.id);
+        w.write_u32(player.id);
         w.write_u32(user_id);
         w.write_string(&user_addr);
         w.write_string(&display);
@@ -378,7 +378,7 @@ fn broadcast_join(
     // Also: send each existing player's Join packet to the entering client.
     // (So the entering client knows about everyone already present.)
     let iid = inst_arc.read().internal_id;
-    let existing: Vec<(u16, u16)> = {
+    let existing: Vec<(u32, u16)> = {
         let inst = inst_arc.read();
         inst.get_players()
             .iter()
@@ -403,7 +403,7 @@ fn broadcast_join(
             let mut w = PacketWriter::new();
             w.write_u8(iid);
             w.write_u8(0u8); // AvatarChangedResult::Changing
-            w.write_u16(other_pid);
+            w.write_u32(other_pid);
             w.write_u32(avatar.id);
             w.write_string(&avatar.server);
             w.write_u16(avatar.version);
@@ -427,7 +427,7 @@ fn broadcast_join(
             let mut w = PacketWriter::new();
             w.write_u8(iid);
             w.write_u8(TransformType::EntityPart as u8);
-            w.write_u16(other_pid);
+            w.write_u32(other_pid);
             w.write_u16(rig_id);
             w.write_u8(tr_flags.bits());
             if tr_flags.contains(TransformFlags::POSITION) {
@@ -445,7 +445,7 @@ fn broadcast_join(
             if tr_flags.contains(TransformFlags::ANG_VELOCITY) {
                 w.write_vec3(tr.ang_velocity);
             }
-            w.write_u16(other_pid); // broadcaster = player itself
+            w.write_u32(other_pid); // broadcaster = player itself
             let pkt = encode_stream_packet(0, PacketType::Transform, w.finish().as_ref());
             if let Some(joining_arc) = state.clients.get(entering_client_id) {
                 joining_arc.read().try_push(pkt);
@@ -457,7 +457,7 @@ fn broadcast_join(
 fn build_existing_join(
     state: &AppState,
     iid: u8,
-    player_id: u16,
+    player_id: u32,
     other_cid: u16,
     inst_arc: &std::sync::Arc<parking_lot::RwLock<crate::instance::Instance>>,
 ) -> Bytes {
@@ -492,7 +492,7 @@ fn build_existing_join(
     let mut w = PacketWriter::new();
     w.write_u8(iid);
     w.write_u32(player.flags.bits());
-    w.write_u16(player.id);
+    w.write_u32(player.id);
     w.write_u32(user_id);
     w.write_string(&user_addr);
     w.write_string(&display);

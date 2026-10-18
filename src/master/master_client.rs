@@ -178,7 +178,7 @@ impl MasterClient {
                     password: None, // Password hash is not synced back
                     capacity: inst.capacity,
                     player_count: inst.get_players().len(),
-                    world: inst.world.to_identifier(),
+                    world: WorldInfo::from(&inst.world),
                     flags: format!("{:?}", inst.flags),
                 }
             })
@@ -194,7 +194,7 @@ impl MasterClient {
 
     /// Called when connected to master. Syncs existing instances and requests new ones if needed.
     pub async fn on_connected(&self) {
-        use crate::instance::{Instance, InstanceFlags, World};
+        use crate::instance::{Instance, InstanceFlags, TravelTarget, World};
 
         // Small delay to ensure send_task is ready before sending messages
         // This prevents race condition where notify_one() is called before notified().await
@@ -351,8 +351,11 @@ impl MasterClient {
                     }
 
                     if let Some(world_spec) = spec.world {
-                        instance.world =
-                            World::new(world_spec.id, world_spec.address, world_spec.version);
+                        instance.world = TravelTarget::Node(World::new(
+                            world_spec.id,
+                            world_spec.address,
+                            world_spec.version,
+                        ));
                     }
 
                     self.instances.add(instance);
@@ -585,7 +588,7 @@ impl MasterClient {
     /// Process one inbound WS text message.
     async fn handle_inbound(&self, text: &str) {
         use super::messages::InstanceSpec;
-        use crate::instance::{Instance, InstanceFlags, World};
+        use crate::instance::{Instance, InstanceFlags, TravelTarget, World};
         let Ok(envelope) = serde_json::from_str::<WsMessage<Value>>(text) else {
             warn!("[MasterClient] Failed to parse inbound: {text}");
             return;
@@ -636,8 +639,11 @@ impl MasterClient {
                         instance.set_password(Some(pwd));
                     }
                     if let Some(world_spec) = spec.world {
-                        instance.world =
-                            World::new(world_spec.id, world_spec.address, world_spec.version);
+                        instance.world = TravelTarget::Node(World::new(
+                            world_spec.id,
+                            world_spec.address,
+                            world_spec.version,
+                        ));
                     }
                     self.instances.add(instance);
                     info!(
@@ -781,16 +787,13 @@ impl MasterClient {
                             let inst = arc.read();
                             let (effective_tps, effective_threshold) =
                                 inst.get_effective_settings(&self.config.load_balancing);
+                            let world = WorldInfo::from(&inst.world);
                             InstanceInfo {
                                 internal_id: inst.internal_id as u32,
                                 node_id: inst.master_id,
                                 flags: inst.flags.bits(),
                                 player_count: inst.player_count() as u32,
-                                world: WorldInfo {
-                                    master_id: inst.world.master_id,
-                                    server: inst.world.address.clone(),
-                                    version: inst.world.version,
-                                },
+                                world,
                                 capacity: inst.capacity,
                                 tps: inst.tps,
                                 threshold: inst.threshold,

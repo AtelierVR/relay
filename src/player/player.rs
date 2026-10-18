@@ -1,31 +1,28 @@
-use std::time::SystemTime;
+use std::ops::{Deref, DerefMut};
 
-use super::{
-    player_flags::PlayerFlags, player_status::PlayerStatus, player_transform::PlayerTransforms,
-};
+use super::{player_flags::PlayerFlags, player_status::PlayerStatus};
 use crate::avatar::Avatar;
+use crate::instance::entities::{Entity, KIND_PLAYER};
 
 /// A player inside an instance.
+///
+/// A player is an entity: it embeds the shared [`Entity`] record and derefs to it, so `player.id`,
+/// `player.kind`, `player.display`, `player.created_at`, `player.transforms`, ... are the entity
+/// fields. Only the player-specific state is declared below.
 #[derive(Debug)]
 pub struct Player {
-    /// Relay-assigned player ID (unique within the instance).
-    pub id: u16,
+    /// Shared entity record.
+    pub entity: Entity,
     /// ID of the owning client connection.
     pub client_id: u16,
     /// Internal instance ID.
     pub instance_id: u8,
     /// Player lifecycle status.
     pub status: PlayerStatus,
-    /// Optional custom display name (overrides user.display_name).
-    pub display: Option<String>,
-    /// Unix millisecond timestamp when the player entered the instance.
-    pub created_at: i64,
-    /// Role and state flags.
+    /// Role and state flags (the entity behaviour flags live in `entity.flags`).
     pub flags: PlayerFlags,
     /// Currently equipped avatar.
     pub avatar: Option<Avatar>,
-    /// Per-rig-part transforms.
-    pub transforms: PlayerTransforms,
     /// Per-player TPS override (0 = use instance default).
     pub custom_tps: u8,
     /// Per-player threshold override. (0.0 = use instance default).
@@ -33,22 +30,22 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn new(id: u16, client_id: u16, instance_id: u8) -> Self {
-        let now_ms = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as i64;
+    pub fn new(id: u32, client_id: u16, instance_id: u8) -> Self {
+        let entity = Entity {
+            id,
+            kind: KIND_PLAYER.to_string(),
+            // A player owns itself.
+            owner_id: id,
+            ..Entity::new()
+        };
 
         Self {
-            id,
+            entity,
             client_id,
             instance_id,
             status: PlayerStatus::None,
-            display: None,
-            created_at: now_ms,
             flags: PlayerFlags::NONE,
             avatar: None,
-            transforms: PlayerTransforms::new(),
             custom_tps: 0,
             custom_threshold: 0.0,
         }
@@ -68,5 +65,19 @@ impl Player {
 
     pub fn is_ready(&self) -> bool {
         self.status == PlayerStatus::Ready
+    }
+}
+
+impl Deref for Player {
+    type Target = Entity;
+
+    fn deref(&self) -> &Entity {
+        &self.entity
+    }
+}
+
+impl DerefMut for Player {
+    fn deref_mut(&mut self) -> &mut Entity {
+        &mut self.entity
     }
 }

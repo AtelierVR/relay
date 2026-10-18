@@ -1,8 +1,8 @@
 /// Event handler — name-tagged binary broadcast with optional targeting.
 ///
 /// Request:  [iid: u8][name: i64][data_len: u16][data: bytes]
-///           (?[target_count: u8][target_ids: u16 × count])
-/// Broadcast: [iid][player_id: u16][name: i64][data_len: u16][data: bytes]
+///           (?[target_count: u8][target_ids: u32 × count])
+/// Broadcast: [iid][player_id: u32][name: i64][data_len: u16][data: bytes]
 use tracing::debug;
 
 use crate::{
@@ -56,7 +56,7 @@ pub async fn handle(packet: Packet) {
         let count = r.read_u8();
         let mut targets = Vec::with_capacity(count as usize);
         for _ in 0..count {
-            let target_pid = r.read_u16();
+            let target_pid = r.read_u32();
             let inst = inst_arc.read();
             if let Some(p) = inst
                 .get_players()
@@ -79,7 +79,7 @@ pub async fn handle(packet: Packet) {
     let broadcast = {
         let mut w = PacketWriter::new();
         w.write_u8(iid);
-        w.write_u16(self_player_id);
+        w.write_u32(self_player_id);
         w.write_i64(name);
         w.write_u16(event_data.len() as u16);
         w.write_bytes(&event_data);

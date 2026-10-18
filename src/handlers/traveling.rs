@@ -14,6 +14,7 @@ use tracing::debug;
 use crate::{
     constants::SAFE_LOCAL_ADDRESS,
     handlers::packet::Packet,
+    instance::{TravelTarget, World},
     player::PlayerStatus,
     proto::{
         buffer::{PacketReader, PacketWriter},
@@ -43,7 +44,7 @@ impl TravelingAction {
 #[repr(u8)]
 enum TravelingResults {
     None = 0,
-    UseUrl = 1 << 1,
+    UseBundle = 1 << 1,
     UseNode = 1 << 2,
     UseHash = 1 << 3,
     Unknown = 1 << 4,
@@ -108,7 +109,7 @@ pub async fn handle(mut packet: Packet) {
 fn do_travel(
     packet: &mut Packet,
     iid: u8,
-    player_id: u16,
+    player_id: u32,
     inst_arc: &crate::instance::ArcInstance,
 ) {
     let uid = packet.uid;
@@ -127,23 +128,34 @@ fn do_travel(
         ));
     }
 
-    let (master_id, address, version) = {
+    // Resolve where the player must travel: a configured standalone bundle (`UseBundle`)
+    // takes precedence, otherwise the instance's master world (`UseNode`).
+    let target = {
         let inst = inst_arc.read();
-        let w = &inst.world;
-        if w.master_id == 0 && w.address.is_empty() {
-            return packet.reply_raw(make_response(
-                uid,
-                iid,
-                TravelingResults::Unknown,
-                Some("World is not set for the instance."),
-            ));
+        match &inst.world {
+            TravelTarget::Bundle(bundle) => Some(TravelTarget::Bundle(bundle.clone())),
+            TravelTarget::Node(w) => {
+                if w.master_id == 0 && w.address.is_empty() {
+                    None
+                } else {
+                    let address = if w.address == SAFE_LOCAL_ADDRESS {
+                        packet.state.config.node_address.clone()
+                    } else {
+                        w.address.clone()
+                    };
+                    Some(TravelTarget::Node(World::new(w.master_id, address, w.version)))
+                }
+            }
         }
-        let address = if w.address == SAFE_LOCAL_ADDRESS {
-            packet.state.config.node_address.clone()
-        } else {
-            w.address.clone()
-        };
-        (w.master_id, address, w.version)
+    };
+
+    let Some(target) = target else {
+        return packet.reply_raw(make_response(
+            uid,
+            iid,
+            TravelingResults::Unknown,
+            Some("World is not set for the instance."),
+        ));
     };
 
     {
@@ -160,10 +172,25 @@ fn do_travel(
 
     let mut w = PacketWriter::new();
     w.write_u8(iid);
-    w.write_u8(TravelingResults::UseNode as u8);
-    w.write_u32(master_id);
-    w.write_string(&address);
-    w.write_u16(version);
+    match target {
+        TravelTarget::Bundle(bundle) => {
+            let mut hash = [0u8; 32];
+            let n = bundle.hash.len().min(32);
+            hash[..n].copy_from_slice(&bundle.hash[..n]);
+
+            w.write_u8(TravelingResults::UseBundle as u8);
+            w.write_string(&bundle.url);
+            w.write_bytes(&hash);
+            w.write_u32(bundle.size);
+        }
+        TravelTarget::Node(world) => {
+            w.write_u8(TravelingResults::UseNode as u8);
+            w.write_u32(world.master_id);
+            w.write_string(&world.address);
+            w.write_u16(world.version);
+        }
+    }
+
     packet.reply_raw(encode_stream_packet(
         uid,
         PacketType::Traveling,
@@ -171,7 +198,7 @@ fn do_travel(
     ));
 }
 
-fn do_ready(packet: &mut Packet, iid: u8, player_id: u16, inst_arc: &crate::instance::ArcInstance) {
+fn do_ready(packet: &mut Packet, iid: u8, player_id: u32, inst_arc: &crate::instance::ArcInstance) {
     let uid = packet.uid;
     let status = {
         let inst = inst_arc.read();

@@ -143,7 +143,7 @@ async fn handle_sample(
         let mut w = PacketWriter::new();
         w.write_u8(iid);
         w.write_u8(StreamSubType::Sample as u8);
-        w.write_u16(self_player_id);
+        w.write_u32(self_player_id);
         w.write_u32(channel_id);
         w.write_u8(level_flags);
         if (level_flags & level::GROUP_BIT) != 0 {
@@ -180,8 +180,8 @@ async fn handle_control(
     inst_arc: &parking_lot::RwLock<crate::instance::Instance>,
     r: &mut PacketReader,
 ) {
-    let listener_id = r.read_u16();
-    let speaker_id = r.read_u16();
+    let listener_id = r.read_u32();
+    let speaker_id = r.read_u32();
     let control_flags = r.read_u8();
     let can_hear = (control_flags & ctrl::CAN_HEAR_BIT) != 0;
 

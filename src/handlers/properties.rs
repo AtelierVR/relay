@@ -1,13 +1,20 @@
-/// Properties handler — broadcasts a per-player dictionary of key/value byte blobs.
+/// Properties handler — broadcasts a key/value byte dictionary for an entity.
 ///
-/// Request:  [iid: u8][pid: u16][count: u8] then count×([key: i32][len: u8][bytes: len])
-///   count=0 → no-op (echo nothing, just broadcast empty dict to all)
-/// Broadcast: [iid][eId(op)][bId(self)][count][...entries]
+/// A player is an entity, so players and networked entities (props, ...) share this single path: the
+/// owner of the target entity (a player owns itself) or a privileged player may write, and the
+/// dictionary is relayed to the other players of the instance. The client dispatches on the entity
+/// it resolves: an entity payload for a prop, the avatar-parameter pipeline for a player.
+///
+/// Request:  [iid: u8][eid: u32][count: u8] then count×([key: i32][len: u8][bytes: len])
+///   `eid` is any entity id; `SELF` (`u32::MAX`) selects the sending player itself.
+///   count=0 → empty dictionary echoed to the caller only
+/// Broadcast: [iid][eId][bId(self)][count][...entries]
 use bytes::Bytes;
 use std::collections::HashMap;
 use tracing::debug;
 
 use crate::{
+    constants::SELF,
     handlers::packet::Packet,
     proto::{
         buffer::{PacketReader, PacketWriter},
@@ -31,10 +38,11 @@ pub async fn handle(packet: Packet) {
         }
     };
 
-    let self_player_id = {
+    // Only a ready player may write properties.
+    let (self_player_id, privileged) = {
         let inst = inst_arc.read();
-        match inst.get_players().iter().find(|p| p.client_id == client_id) {
-            Some(p) if p.is_ready() => p.id,
+        match inst.get_player_by_client(client_id) {
+            Some(p) if p.is_ready() => (p.id, p.has_privilege()),
             _ => {
                 debug!("[Properties] not-ready player from client {}", client_id);
                 return;
@@ -42,45 +50,41 @@ pub async fn handle(packet: Packet) {
         }
     };
 
-    let pid = r.read_u16();
-
-    // Resolve op player.
-    let op_player_id = if pid != u16::MAX && pid != self_player_id {
-        let inst = inst_arc.read();
-        match inst.get_players().iter().find(|p| p.id == pid) {
-            Some(p) if p.is_ready() => {
-                let self_p = inst
-                    .get_players()
-                    .iter()
-                    .find(|p| p.id == self_player_id)
-                    .unwrap();
-                if !self_p.has_privilege() {
-                    debug!("[Properties] unprivileged operation on player {}", pid);
-                    return;
-                }
-                p.id
-            }
-            _ => {
-                debug!("[Properties] op-player {} not ready", pid);
-                return;
-            }
-        }
-    } else {
+    // `SELF` is the "self player" shortcut of the protocol; every other id is an entity id.
+    let requested = r.read_u32();
+    let entity_id = if requested == SELF {
         self_player_id
+    } else {
+        requested
     };
+
+    // A player is an entity: the owner of the target (a player owns itself) or a privileged player
+    // may write to it.
+    let owner = {
+        let inst = inst_arc.read();
+        inst.get_entity(entity_id).map(|entity| entity.owner_id)
+    };
+
+    if owner != Some(self_player_id) && !privileged {
+        debug!(
+            "[Properties] player {} tried to write the properties of entity {} (owner {:?})",
+            self_player_id, entity_id, owner
+        );
+        return;
+    }
 
     let count = r.read_u8();
 
-    // C#: if count==0, echo empty props back to the caller only and return.
+    // C#: if count==0, echo the empty dictionary back to the caller only and return.
     if count == 0 {
-        let packet = build_properties(iid, op_player_id, self_player_id, &HashMap::new());
+        let packet = build_properties(iid, entity_id, self_player_id, &HashMap::new());
         if let Some(arc) = state.clients.get(client_id) {
             arc.read().try_push(packet);
         }
         return;
     }
 
-    let mut dict: HashMap<i32, Vec<u8>> = HashMap::new();
+    let mut dict: HashMap<i32, Vec<u8>> = HashMap::with_capacity(count as usize);
     for _ in 0..count {
         let key = r.read_i32();
         let len = r.read_u8();
@@ -88,8 +92,8 @@ pub async fn handle(packet: Packet) {
         dict.insert(key, val);
     }
 
-    // Broadcast to all other players.
-    let broadcast = build_properties(iid, op_player_id, self_player_id, &dict);
+    // Broadcast to every other player of the instance.
+    let broadcast = build_properties(iid, entity_id, self_player_id, &dict);
     let other_cids: Vec<u16> = {
         let inst = inst_arc.read();
         inst.get_players()
@@ -107,14 +111,14 @@ pub async fn handle(packet: Packet) {
 
 fn build_properties(
     iid: u8,
-    entity_id: u16,
-    broadcaster_id: u16,
+    entity_id: u32,
+    broadcaster_id: u32,
     dict: &HashMap<i32, Vec<u8>>,
 ) -> Bytes {
     let mut w = PacketWriter::new();
     w.write_u8(iid);
-    w.write_u16(entity_id);
-    w.write_u16(broadcaster_id);
+    w.write_u32(entity_id);
+    w.write_u32(broadcaster_id);
     w.write_u8(dict.len() as u8);
     for (key, val) in dict {
         w.write_i32(*key);

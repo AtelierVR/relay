@@ -3,9 +3,11 @@
 /// Datagram wire (after [UID:u16][Type:u8]):
 ///
 /// EntityPart (sub-type 0x01):
-///   [iid: u8][TransformType: u8 = 1][pid: u16][rig: u16][flags: u8]
+///   [iid: u8][TransformType: u8 = 1][pid: u32][rig: u16][flags: u8]
 ///   (?position: vec3)(?rotation: quat)(?scale: vec3)(?velocity: vec3)(?ang_velocity: vec3)
 ///   Broadcast: [iid][TransformType::EntityPart][eId][rig][flags][...][bId]
+///
+/// `pid` may be `SELF` (`u32::MAX`), meaning the sending player itself.
 ///
 /// ByPath (sub-type 0x00):
 ///   [iid: u8][TransformType: u8 = 0][path: string][flags: u8][...]
@@ -14,6 +16,7 @@ use bytes::Bytes;
 use tracing::debug;
 
 use crate::{
+    constants::SELF,
     handlers::packet::Packet,
     player::rig::{Transform, TransformFlags},
     proto::{
@@ -65,10 +68,11 @@ fn on_entity_part(
 ) {
     let state = &packet.state;
     let client_id = packet.client_id();
+
     // Self player must be ready.
     let self_player_id = {
         let inst = inst_arc.read();
-        match inst.get_players().iter().find(|p| p.client_id == client_id) {
+        match inst.get_player_by_client(client_id) {
             Some(p) if p.is_ready() => p.id,
             _ => {
                 debug!(
@@ -80,49 +84,57 @@ fn on_entity_part(
         }
     };
 
-    let pid = r.read_u16();
-    let op_player_id = if pid != u16::MAX && pid != self_player_id {
-        let inst = inst_arc.read();
-        match inst.get_players().iter().find(|p| p.id == pid) {
-            Some(p) if p.is_ready() => {
-                // must have privilege to operate on another
-                let self_p = inst
-                    .get_players()
-                    .iter()
-                    .find(|p| p.id == self_player_id)
-                    .unwrap();
-                if !self_p.has_privilege() {
-                    debug!(
-                        "[Transform] EntityPart: client {} lacks privilege for player {}",
-                        client_id, pid
-                    );
-                    return;
-                }
-                p.id
-            }
-            _ => {
-                debug!("[Transform] EntityPart: op-player {} not ready", pid);
-                return;
-            }
-        }
-    } else {
+    // `SELF` selects the command executor (the self player).
+    let requested = r.read_u32();
+    let target_id = if requested == SELF {
         self_player_id
+    } else {
+        requested
     };
+
+    // Players and networked entities share the same transform. Only the owner (a player owns itself)
+    // or a privileged player may move the target.
+    let can_move = {
+        let inst = inst_arc.read();
+        let privileged = inst
+            .get_player(self_player_id)
+            .map(|p| p.has_privilege())
+            .unwrap_or(false);
+
+        match inst.get_entity(target_id) {
+            Some(entity) => entity.owner_id == self_player_id || privileged,
+            None => false,
+        }
+    };
+
+    if !can_move {
+        debug!(
+            "[Transform] EntityPart: client {} cannot move entity {}",
+            client_id, target_id
+        );
+        return;
+    }
 
     let rig_id = r.read_u16();
     let flags = TransformFlags::from_bits_truncate(r.read_u8());
+    let active_flags = flags & !TransformFlags::RESET;
+    let is_reset = flags.contains(TransformFlags::RESET);
 
-    // Get or default existing transform.
-    let mut tr = if flags.contains(TransformFlags::RESET) {
+    // Get or default the existing transform: a player and a networked entity both store one per
+    // rig part (the flags telling which fields were ever sent are kept alongside).
+    let mut tr = if is_reset {
         Transform::default()
     } else {
         let inst = inst_arc.read();
-        inst.get_player(op_player_id)
-            .and_then(|p| p.transforms.get(rig_id))
-            .unwrap_or_default()
+        if let Some(p) = inst.get_player(target_id) {
+            p.transforms.get(rig_id)
+        } else {
+            inst.entities
+                .get(target_id)
+                .and_then(|e| e.transforms.get(rig_id))
+        }
+        .unwrap_or_default()
     };
-
-    let active_flags = flags & !TransformFlags::RESET;
 
     if flags.contains(TransformFlags::POSITION) {
         tr.position = r.read_vec3();
@@ -140,10 +152,8 @@ fn on_entity_part(
         tr.ang_velocity = r.read_vec3();
     }
 
-    // Build broadcast datagram.
-    let broadcast = build_entity_part(iid, op_player_id, self_player_id, rig_id, active_flags, &tr);
-
-    // Send to all visible others.
+    // Broadcast to all visible others.
+    let broadcast = build_entity_part(iid, target_id, self_player_id, rig_id, active_flags, &tr);
     let recipients: Vec<u16> = {
         let inst = inst_arc.read();
         inst.get_players()
@@ -154,13 +164,13 @@ fn on_entity_part(
     };
     send_datagram_broadcast(state, &recipients, broadcast);
 
-    // Store updated transform (strip RESET, accumulate flags).
-    {
-        let is_reset = flags.contains(TransformFlags::RESET);
-        let mut inst = inst_arc.write();
-        if let Some(p) = inst.get_player_mut(op_player_id) {
-            p.transforms.set(rig_id, active_flags, tr, is_reset);
-        }
+    // Store the updated transform: a player and a networked entity both store one entry per rig
+    // part, and both remember which transform fields were actually sent.
+    let mut inst = inst_arc.write();
+    if let Some(p) = inst.get_player_mut(target_id) {
+        p.transforms.set(rig_id, active_flags, tr, is_reset);
+    } else if let Some(e) = inst.entities.get_mut(target_id) {
+        e.transforms.set(rig_id, active_flags, tr, is_reset);
     }
 }
 
@@ -174,7 +184,7 @@ fn on_by_path(
     let client_id = packet.client_id();
     let self_player_id = {
         let inst = inst_arc.read();
-        match inst.get_players().iter().find(|p| p.client_id == client_id) {
+        match inst.get_player_by_client(client_id) {
             Some(p) if p.is_ready() && p.has_privilege() => p.id,
             _ => {
                 debug!(
@@ -229,10 +239,10 @@ fn on_by_path(
 
 // ── Wire builders ─────────────────────────────────────────────────────────────
 
-fn build_entity_part(
+pub(crate) fn build_entity_part(
     iid: u8,
-    entity_id: u16,
-    broadcaster_id: u16,
+    entity_id: u32,
+    broadcaster_id: u32,
     rig: u16,
     flags: TransformFlags,
     tr: &Transform,
@@ -240,18 +250,18 @@ fn build_entity_part(
     let mut w = PacketWriter::new();
     w.write_u8(iid);
     w.write_u8(TransformType::EntityPart as u8);
-    w.write_u16(entity_id);
+    w.write_u32(entity_id);
     w.write_u16(rig);
     w.write_u8(flags.bits());
     write_transform_fields(&mut w, flags, tr);
-    w.write_u16(broadcaster_id);
+    w.write_u32(broadcaster_id);
     encode_datagram(0, PacketType::Transform, w.finish().as_ref())
 }
 
 fn build_by_path(
     iid: u8,
     path: &str,
-    player_id: u16,
+    player_id: u32,
     flags: TransformFlags,
     tr: &Transform,
 ) -> Bytes {
@@ -261,7 +271,7 @@ fn build_by_path(
     w.write_string(path);
     w.write_u8(flags.bits());
     write_transform_fields(&mut w, flags, tr);
-    w.write_u16(player_id);
+    w.write_u32(player_id);
     encode_datagram(0, PacketType::Transform, w.finish().as_ref())
 }
 

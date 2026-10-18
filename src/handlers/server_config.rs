@@ -134,7 +134,7 @@ pub async fn handle(mut packet: Packet) {
     );
 
     // Collect players' IDs for broadcast.
-    let player_ids: Vec<(u16, u16)> = {
+    let player_ids: Vec<(u32, u16)> = {
         let inst = inst_arc.read();
         inst.get_players()
             .iter()
@@ -164,7 +164,7 @@ fn build_config_response(
     iid: u8,
     uid: u16,
     flags: ServerConfigFlags,
-    player_id: u16,
+    player_id: u32,
     lb_config: &crate::config::LoadBalancingConfig,
 ) -> Bytes {
     let inst = inst_arc.read();
@@ -223,7 +223,7 @@ fn build_config_broadcast(
     inst_arc: &ArcInstance,
     iid: u8,
     flags: ServerConfigFlags,
-    player_id: u16,
+    player_id: u32,
     lb_config: &crate::config::LoadBalancingConfig,
 ) -> Bytes {
     let inst = inst_arc.read();
@@ -292,7 +292,7 @@ pub fn broadcast_config_change(
 ) {
     use tracing::info;
 
-    let player_ids: Vec<(u16, u16)> = {
+    let player_ids: Vec<(u32, u16)> = {
         let inst = inst_arc.read();
         inst.get_players()
             .iter()

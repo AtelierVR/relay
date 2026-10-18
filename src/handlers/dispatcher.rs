@@ -9,9 +9,9 @@ use tracing::{debug, warn};
 use crate::proto::packet_type::PacketType;
 
 use super::{
-    auth, avatar_changed, custom, disconnect, enter, event, handshake, latency, message,
-    packet::Packet, player_update, properties, quit, reliable, server_config, sessions, stream,
-    teleport, transform, traveling,
+    auth, avatar_changed, custom, disconnect, entities, enter, event, handshake, latency,
+    message, packet::Packet, player_update, properties, quit, reliable, server_config, sessions,
+    stream, teleport, transform, traveling,
 };
 
 /// Packets that should not be logged (too frequent or low-value)
@@ -57,6 +57,7 @@ pub async fn dispatch(packet: Packet) {
         PacketType::PlayerUpdate => player_update::handle(packet).await,
         PacketType::Sessions => sessions::handle(packet).await,
         PacketType::Event => event::handle(packet).await,
+        PacketType::Entities => entities::handle(packet).await,
         PacketType::Message => message::handle(packet).await,
 
         // ── Datagram packets ──────────────────────────────────────────────

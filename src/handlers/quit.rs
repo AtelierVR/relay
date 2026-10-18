@@ -117,7 +117,7 @@ pub async fn handle(mut packet: Packet) {
     );
 
     // Collect all other READY players for Leave fanout: (player_id, client_id, has_privilege).
-    let others: Vec<(u16, u16, bool)> = {
+    let others: Vec<(u32, u16, bool)> = {
         let inst = inst_arc.read();
         inst.get_players()
             .iter()
@@ -146,7 +146,7 @@ pub async fn handle(mut packet: Packet) {
             } else {
                 quit_type
             };
-            // For moderation actions, privileged receivers also get [by_id: u16] + reason.
+            // For moderation actions, privileged receivers also get [by_id: u32] + reason.
             let by_id = if *other_has_priv && quit_type.is_moderation_action() {
                 Some(self_player_id)
             } else {
@@ -193,18 +193,18 @@ pub async fn handle(mut packet: Packet) {
 
 fn build_leave(
     iid: u8,
-    player_id: u16,
+    player_id: u32,
     quit_type: QuitType,
-    by_id: Option<u16>,
+    by_id: Option<u32>,
     reason: Option<&str>,
 ) -> Bytes {
     let mut w = PacketWriter::new();
     w.write_u8(iid);
     w.write_u8(quit_type as u8);
-    w.write_u16(player_id);
-    // C#: privileged receivers get [by_id: u16] (and optional reason) for moderation actions.
+    w.write_u32(player_id);
+    // C#: privileged receivers get [by_id: u32] (and optional reason) for moderation actions.
     if let Some(by) = by_id {
-        w.write_u16(by);
+        w.write_u32(by);
         if let Some(r) = reason {
             w.write_string(r);
         }
@@ -215,7 +215,7 @@ fn build_leave(
 /// Remove a client from all instances they are in, broadcasting `Leave` to remaining players.
 /// Called on explicit `Disconnect` packet and on QUIC connection close.
 pub fn leave_all_instances(state: &AppState, client_id: u16) {
-    let mut entries: Vec<(u8, u16, bool)> = Vec::new();
+    let mut entries: Vec<(u8, u32, bool)> = Vec::new();
     state.instances.for_each(|iid, inst_arc| {
         let inst = inst_arc.read();
         if let Some(p) = inst.get_players().iter().find(|p| p.client_id == client_id) {

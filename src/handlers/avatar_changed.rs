@@ -47,10 +47,10 @@ pub async fn handle(mut packet: Packet) {
         }
     };
 
-    let pid = r.read_u16();
+    let pid = r.read_u32();
 
     // Resolve operating player (may be someone else if caller has privilege).
-    let op_player_id = if pid != u16::MAX && pid != self_player_id {
+    let op_player_id = if pid != crate::constants::SELF && pid != self_player_id {
         // Check opPlayer exists and caller is allowed.
         let inst = inst_arc.read();
         let op = match inst.get_players().iter().find(|p| p.id == pid) {
@@ -126,11 +126,11 @@ pub async fn handle(mut packet: Packet) {
     ));
 }
 
-fn build_broadcast(iid: u8, player_id: u16, avatar: &Avatar) -> Bytes {
+fn build_broadcast(iid: u8, player_id: u32, avatar: &Avatar) -> Bytes {
     let mut w = PacketWriter::new();
     w.write_u8(iid);
     w.write_u8(AvatarChangedResult::Changing as u8);
-    w.write_u16(player_id);
+    w.write_u32(player_id);
     w.write_u32(avatar.id);
     w.write_string(&avatar.server);
     w.write_u16(avatar.version);

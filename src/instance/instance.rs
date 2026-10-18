@@ -1,5 +1,6 @@
 use parking_lot::RwLock;
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use crate::constants::{
@@ -10,7 +11,8 @@ use crate::player::Player;
 use crate::utils::hashing::verify_password;
 
 use super::{
-    flags::InstanceFlags, user_moderated::UserModerated, view_group::ViewGroup, world::World,
+    entities::{Entity, InstanceEntities}, flags::InstanceFlags, user_moderated::UserModerated,
+    view_group::ViewGroup, world::TravelTarget,
 };
 
 /// A relay-hosted instance (a "room" players can enter).
@@ -33,8 +35,8 @@ pub struct Instance {
     /// Interval in seconds at which clients must re-send unchanged LocalEmit properties.
     /// 0 = feature disabled.
     pub property_resend_interval: u8,
-    /// The virtual world this instance belongs to.
-    pub world: World,
+    /// Where clients of this instance must travel to (node-resolved world or self-hosted bundle).
+    pub world: TravelTarget,
     /// Argon2-hashed password (only set when `flags` has `USE_PASSWORD`).
     password_hash: Option<String>,
     /// Players currently in this instance.
@@ -43,9 +45,11 @@ pub struct Instance {
     view_groups: Vec<ViewGroup>,
     /// Moderation records.
     moderated: Vec<UserModerated>,
+    /// Networked entity registry (props, mirrors, ...).
+    pub entities: InstanceEntities,
     /// Hearing control map: (listener_id, speaker_id, channel_id) → can_hear.
     /// When empty, all players can hear all others. When a key exists, its value is authoritative.
-    pub hearing_map: HashMap<(u16, u16, u32), bool>,
+    pub hearing_map: HashMap<(u32, u32, u32), bool>,
     /// Counter for custom view-group IDs (starts at `u32::from(u16::MAX) + 1`).
     next_view_group_id: u32,
     /// Duration of the last tick in milliseconds (for load balancing).
@@ -98,6 +102,27 @@ fn compute_perf_factor(
 
 // ── Instance ──────────────────────────────────────────────────────────────
 
+/// A resolved entity of an instance: a player or a networked entity (a player is an entity).
+///
+/// It derefs to the [`Entity`] record, so `entity.id`, `entity.display`, `entity.transforms`, ...
+/// work the same for a player and for a networked entity.
+#[derive(Debug)]
+pub enum EntityRef<'a> {
+    Player(&'a Player),
+    Networked(&'a Entity),
+}
+
+impl Deref for EntityRef<'_> {
+    type Target = Entity;
+
+    fn deref(&self) -> &Entity {
+        match self {
+            EntityRef::Player(player) => &player.entity,
+            EntityRef::Networked(entity) => entity,
+        }
+    }
+}
+
 impl Instance {
     pub fn new(internal_id: u8, master_id: u32, state: Option<Arc<AppState>>) -> Self {
         Self {
@@ -109,11 +134,12 @@ impl Instance {
             threshold: DEFAULT_THRESHOLD,
             render_entity: DEFAULT_RENDER_ENTITY,
             property_resend_interval: DEFAULT_PROPERTY_RESEND_INTERVAL,
-            world: World::default(),
+            world: TravelTarget::default(),
             password_hash: None,
             players: Vec::new(),
             view_groups: Vec::new(),
             moderated: Vec::new(),
+            entities: InstanceEntities::new(),
             hearing_map: HashMap::new(),
             next_view_group_id: u32::from(u16::MAX) + 1,
             last_tick_duration: 0.0,
@@ -192,7 +218,7 @@ impl Instance {
         self.players.push(player);
     }
 
-    pub fn remove_player(&mut self, player_id: u16) -> Option<Player> {
+    pub fn remove_player(&mut self, player_id: u32) -> Option<Player> {
         if let Some(pos) = self.players.iter().position(|p| p.id == player_id) {
             let player = self.players.remove(pos);
             self.cleanup_user(player_id);
@@ -210,12 +236,27 @@ impl Instance {
         &mut self.players
     }
 
-    pub fn get_player(&self, player_id: u16) -> Option<&Player> {
+    pub fn get_player(&self, player_id: u32) -> Option<&Player> {
         self.players.iter().find(|p| p.id == player_id)
     }
 
-    pub fn get_player_mut(&mut self, player_id: u16) -> Option<&mut Player> {
+    /// Resolve the player owned by a client connection.
+    pub fn get_player_by_client(&self, client_id: u16) -> Option<&Player> {
+        self.players.iter().find(|p| p.client_id == client_id)
+    }
+
+    pub fn get_player_mut(&mut self, player_id: u32) -> Option<&mut Player> {
         self.players.iter_mut().find(|p| p.id == player_id)
+    }
+
+    /// Resolve an entity id against the players first, then the networked entities.
+    ///
+    /// A player is an entity, so both share the same id space and the same resolver.
+    pub fn get_entity(&self, id: u32) -> Option<EntityRef<'_>> {
+        if let Some(player) = self.get_player(id) {
+            return Some(EntityRef::Player(player));
+        }
+        self.entities.get(id).map(EntityRef::Networked)
     }
 
     pub fn get_master(&self) -> Option<&Player> {
@@ -236,21 +277,23 @@ impl Instance {
         self.capacity != 0 && self.players.len() >= self.capacity as usize
     }
 
-    /// Find the lowest u16 player ID not currently in use (starting from 0).
-    pub fn next_player_id(&self) -> u16 {
-        for id in 0..u16::MAX {
-            if !self.players.iter().any(|p| p.id == id) {
+    /// Find the lowest entity id not currently in use (starting from 0).
+    ///
+    /// Players and networked entities share the same id space: a player is an entity.
+    pub fn next_entity_id(&self) -> u32 {
+        for id in 0..u32::MAX {
+            if !self.players.iter().any(|p| p.id == id) && !self.entities.contains(id) {
                 return id;
             }
         }
-        u16::MAX
+        u32::MAX
     }
 
     // ── ViewGroup ──────────────────────────────────────────────────────────
 
     /// Get or create the automatic view group for a player.
-    pub fn get_or_create_view_group(&mut self, player_id: u16) -> &mut ViewGroup {
-        let group_id = u32::from(player_id);
+    pub fn get_or_create_view_group(&mut self, player_id: u32) -> &mut ViewGroup {
+        let group_id = player_id;
         if !self.view_groups.iter().any(|g| g.id == group_id) {
             let mut g = ViewGroup::new(group_id, Some(format!("User_{player_id}")));
             g.add_member(player_id);
@@ -294,7 +337,7 @@ impl Instance {
         }
     }
 
-    pub fn get_user_groups(&self, player_id: u16) -> Vec<u32> {
+    pub fn get_user_groups(&self, player_id: u32) -> Vec<u32> {
         self.view_groups
             .iter()
             .filter(|g| g.is_member(player_id))
@@ -303,7 +346,7 @@ impl Instance {
     }
 
     /// Check whether `viewer_id` can see `target_id` via shared ViewGroup visibility.
-    pub fn can_user_see_user(&self, viewer_id: u16, target_id: u16) -> bool {
+    pub fn can_user_see_user(&self, viewer_id: u32, target_id: u32) -> bool {
         if viewer_id == target_id {
             return true;
         }
@@ -322,11 +365,11 @@ impl Instance {
     }
 
     /// Remove all ViewGroup memberships for a player; delete empty auto-groups.
-    pub fn cleanup_user(&mut self, player_id: u16) {
+    pub fn cleanup_user(&mut self, player_id: u32) {
         for g in &mut self.view_groups {
             g.remove_member(player_id);
         }
-        let auto_id = u32::from(player_id);
+        let auto_id = player_id;
         if let Some(pos) = self
             .view_groups
             .iter()
@@ -480,7 +523,7 @@ impl Instance {
     /// Returns custom TPS if set, otherwise adaptive TPS.
     pub fn get_player_tps(
         &self,
-        player_id: u16,
+        player_id: u32,
         config: &crate::config::LoadBalancingConfig,
     ) -> u8 {
         if let Some(player) = self.get_player(player_id) {
@@ -495,7 +538,7 @@ impl Instance {
     /// Returns custom threshold if set, otherwise adaptive threshold.
     pub fn get_player_threshold(
         &self,
-        player_id: u16,
+        player_id: u32,
         config: &crate::config::LoadBalancingConfig,
     ) -> f32 {
         if let Some(player) = self.get_player(player_id) {

@@ -4,6 +4,7 @@ pub mod context;
 pub mod custom;
 pub mod disconnect;
 pub mod dispatcher;
+pub mod entities;
 pub mod enter;
 pub mod event;
 pub mod handshake;

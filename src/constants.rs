@@ -3,6 +3,11 @@ pub const PROTOCOL_VERSION: u16 = 2;
 pub const ENGINE: &str = "nox";
 pub const VERSION: &str = "0.1.0";
 
+/// Player/entity id sentinel meaning "the current player" (`u32::MAX`).
+/// Used by the properties and transform protocols: the sender asks the relay to act on itself
+/// instead of naming an explicit player/entity id.
+pub const SELF: u32 = u32::MAX;
+
 // Default network settings.
 pub const DEFAULT_PORT: u16 = 23032;
 pub const DEFAULT_NODE_GATEWAY: &str = "http://127.0.0.1:3042";
