@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 mod avatar;
+mod cli;
 mod client;
 mod commands;
 mod config;
@@ -57,7 +58,7 @@ async fn main() -> Result<()> {
 
     tracing_subscriber::registry()
         .with(filter_layer)
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().with_writer(crate::cli::LogMakeWriter))
         .with(log_layer)
         .init();
 
@@ -119,6 +120,11 @@ async fn main() -> Result<()> {
     // Wire AppState into MasterClient for command execution
     *master.state.lock() = Some(Arc::clone(&state));
 
+    // ── Local command console ──────────────────────────────────────────────
+    // Shares the master's CommandRegistry with the process stdin: interactive TTY gets a
+    // prompt and history, a piped stdin is still read (without a prompt).
+    crate::cli::spawn(Arc::clone(&state), Arc::clone(&state.shutdown));
+
     // ── MasterServer connection (skipped in standalone) ────────────────────
     if config.is_standalone() {
         info!("[Standalone] master connection disabled, self-hosting instance(s)");
@@ -135,9 +141,7 @@ async fn main() -> Result<()> {
                     match world {
                         crate::config::WorldConfig::Identifier(id) => {
                             match parse_world_identifier(id) {
-                                Some(w) => {
-                                    instance.world = crate::instance::TravelTarget::Node(w)
-                                }
+                                Some(w) => instance.world = crate::instance::TravelTarget::Node(w),
                                 None => warn!(
                                     "[Standalone] instance {i}: invalid world identifier '{id}'"
                                 ),
@@ -154,9 +158,9 @@ async fn main() -> Result<()> {
                                         },
                                     );
                                 }
-                                None => warn!(
-                                    "[Standalone] instance {i}: invalid world hash '{hash}'"
-                                ),
+                                None => {
+                                    warn!("[Standalone] instance {i}: invalid world hash '{hash}'")
+                                }
                             }
                         }
                     }
@@ -201,24 +205,30 @@ async fn main() -> Result<()> {
             }
         }
         signal = shutdown_signal() => {
-            info!(
-                "[Relay] {signal} received — disconnecting all clients and shutting down..."
-            );
-
-            // A second signal forces an immediate exit instead of waiting.
-            tokio::spawn(async {
-                let second = shutdown_signal().await;
-                warn!("[Relay] Second {second} received — forcing exit");
-                std::process::exit(130);
-            });
-
-            crate::shutdown::graceful_shutdown(&state, &endpoint, "Server is shutting down")
-                .await;
+            run_shutdown(&state, &endpoint, &format!("{signal} received")).await;
+        }
+        _ = state.shutdown.notified() => {
+            run_shutdown(&state, &endpoint, "Stop requested").await;
         }
     }
 
     info!("[Relay] NoxRelay stopped");
     Ok(())
+}
+
+/// Disconnects every client and closes the endpoint, while a second signal still forces an
+/// immediate exit.
+async fn run_shutdown(state: &Arc<AppState>, endpoint: &Endpoint, reason: &str) {
+    info!("[Relay] {reason} — disconnecting all clients and shutting down...");
+
+    // A second signal forces an immediate exit instead of waiting.
+    tokio::spawn(async {
+        let second = shutdown_signal().await;
+        warn!("[Relay] Second {second} received — forcing exit");
+        std::process::exit(130);
+    });
+
+    crate::shutdown::graceful_shutdown(state, endpoint, "Server is shutting down").await;
 }
 
 /// Resolves when the user requests a shutdown: `Ctrl+C` on every platform, and
@@ -346,5 +356,7 @@ fn parse_world_identifier(raw: &str) -> Option<crate::instance::world::World> {
     } else {
         address
     };
-    Some(crate::instance::world::World::new(master_id, address, version))
+    Some(crate::instance::world::World::new(
+        master_id, address, version,
+    ))
 }

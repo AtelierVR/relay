@@ -23,6 +23,8 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub log_buf: Arc<Mutex<LogBuffer>>,
     pub commands: Arc<std::sync::Mutex<Option<crate::commands::CommandRegistry>>>,
+    /// Wakes the main loop when a graceful shutdown is requested (console or master command).
+    pub shutdown: Arc<tokio::sync::Notify>,
     next_client_id: Arc<AtomicU16>,
 }
 
@@ -52,6 +54,7 @@ impl AppState {
             config,
             log_buf,
             commands: Arc::new(std::sync::Mutex::new(None)),
+            shutdown: Arc::new(tokio::sync::Notify::new()),
             next_client_id: Arc::new(AtomicU16::new(0)),
         }
     }
