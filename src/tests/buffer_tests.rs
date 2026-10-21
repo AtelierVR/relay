@@ -82,7 +82,14 @@ fn i64_big_endian_bytes() {
 
 #[test]
 fn f32_roundtrip() {
-    for v in [0.0_f32, 1.0, -1.0, f32::MAX, f32::MIN_POSITIVE, 3.14] {
+    for v in [
+        0.0_f32,
+        1.0,
+        -1.0,
+        f32::MAX,
+        f32::MIN_POSITIVE,
+        std::f32::consts::PI,
+    ] {
         let result = roundtrip(|w| w.write_f32(v), |r| r.read_f32());
         assert_eq!(result.to_bits(), v.to_bits(), "f32 {v}");
     }
@@ -99,8 +106,8 @@ fn f32_big_endian_bytes() {
 
 #[test]
 fn bool_roundtrip() {
-    assert_eq!(roundtrip(|w| w.write_bool(true), |r| r.read_bool()), true);
-    assert_eq!(roundtrip(|w| w.write_bool(false), |r| r.read_bool()), false);
+    assert!(roundtrip(|w| w.write_bool(true), |r| r.read_bool()));
+    assert!(!roundtrip(|w| w.write_bool(false), |r| r.read_bool()));
     // bool is encoded as a single byte (1 for true, 0 for false)
     let mut w = PacketWriter::new();
     w.write_bool(true);

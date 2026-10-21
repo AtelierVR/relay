@@ -143,7 +143,11 @@ fn do_travel(
                     } else {
                         w.address.clone()
                     };
-                    Some(TravelTarget::Node(World::new(w.master_id, address, w.version)))
+                    Some(TravelTarget::Node(World::new(
+                        w.master_id,
+                        address,
+                        w.version,
+                    )))
                 }
             }
         }

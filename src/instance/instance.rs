@@ -11,8 +11,11 @@ use crate::player::Player;
 use crate::utils::hashing::verify_password;
 
 use super::{
-    entities::{Entity, InstanceEntities}, flags::InstanceFlags, user_moderated::UserModerated,
-    view_group::ViewGroup, world::TravelTarget,
+    entities::{Entity, InstanceEntities},
+    flags::InstanceFlags,
+    user_moderated::UserModerated,
+    view_group::ViewGroup,
+    world::TravelTarget,
 };
 
 /// A relay-hosted instance (a "room" players can enter).

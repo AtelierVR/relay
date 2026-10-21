@@ -5,8 +5,8 @@
 /// - Request:  [protocol: u16][engine: string][platform: string]
 /// - Version mismatch → no response (Bytes::new())
 /// - Response: [protocol: u16][client_id: u16][ip: 4 bytes][port: u16]
-///             [flags: u8](?[master: string]) [max_pkt: u16]
-///             [conn_timeout: u16][keepalive: u16][seg_timeout: u16]
+///   [flags: u8](?[master: string]) [max_pkt: u16]
+///   [conn_timeout: u16][keepalive: u16][seg_timeout: u16]
 /// - Sets client.auth_state = Handshaked
 use bytes::Bytes;
 

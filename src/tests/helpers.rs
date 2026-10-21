@@ -10,8 +10,8 @@ use rustls::{DigitallySignedStruct, Error as TlsError, SignatureScheme};
 
 use crate::{
     client::{client::new_client, ClientManager},
-    config::{Config, LoadBalancingConfig},
-    constants::DEFAULT_NODE_ADDRESS,
+    config::{Config, LoadBalancingConfig, RateLimitConfig},
+    constants::{DEFAULT_NODE_ADDRESS, DEFAULT_TRANSFER_TIMEOUT},
     handlers::context::AppState,
     instance::InstanceManager,
     master::MasterClient,
@@ -120,8 +120,7 @@ pub async fn connect_pair() -> (
 ) {
     let server_config =
         crate::transport::tls::make_server_config(&[], 30, 5).expect("test server TLS");
-    let server_ep =
-        quinn::Endpoint::server(server_config, "127.0.0.1:0".parse().unwrap()).unwrap();
+    let server_ep = quinn::Endpoint::server(server_config, "127.0.0.1:0".parse().unwrap()).unwrap();
     let server_addr = server_ep.local_addr().unwrap();
 
     let mut client_tls = rustls::ClientConfig::builder()
@@ -168,11 +167,13 @@ pub fn make_state() -> Arc<AppState> {
         token: String::new(),
         instances: Vec::new(),
         max_instances: 3,
+        transfer_timeout: DEFAULT_TRANSFER_TIMEOUT,
         connection_timeout: 15,
         keep_alive_interval: 5,
         property_resend_interval: 0,
         debug: false,
         load_balancing: LoadBalancingConfig::default(),
+        rate_limit: RateLimitConfig::default(),
     });
     let clients = Arc::new(ClientManager::new());
     let instances = Arc::new(InstanceManager::new());

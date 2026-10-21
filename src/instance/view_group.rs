@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 /// Manages visibility relationships between players within an instance.
 ///
-    /// - Auto-groups: `id <= u32::MAX`, one per player, created automatically on join.
-    /// - Custom groups: created by the instance/server logic (`next_view_group_id`).
+/// - Auto-groups: `id <= u32::MAX`, one per player, created automatically on join.
+/// - Custom groups: created by the instance/server logic (`next_view_group_id`).
 #[derive(Debug, Clone)]
 pub struct ViewGroup {
     /// Unique group ID within the instance.

@@ -328,7 +328,7 @@ async fn spam_message_task(state: Arc<AppState>) {
 /// Decode a hex string into bytes (even length, valid hex), or `None` otherwise.
 fn decode_hash(hex: &str) -> Option<Vec<u8>> {
     let hex = hex.trim();
-    if hex.is_empty() || hex.len() % 2 != 0 {
+    if hex.is_empty() || !hex.len().is_multiple_of(2) {
         return None;
     }
 

@@ -41,7 +41,8 @@ fn player_key(packet: &Packet) -> u64 {
     crate::rate::key(packet, &[(0, 5)])
 }
 
-pub async fn handle(mut packet: Packet) {    let state = packet.state.clone();
+pub async fn handle(mut packet: Packet) {
+    let state = packet.state.clone();
     let client_id = packet.client_id();
     let uid = packet.uid;
 

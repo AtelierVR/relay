@@ -74,7 +74,8 @@ pub struct Config {
 
 /// Definition of an instance self-hosted by a standalone relay.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InstanceConfig {    /// Maximum player count (0 = unlimited).
+pub struct InstanceConfig {
+    /// Maximum player count (0 = unlimited).
     #[serde(default)]
     pub capacity: u16,
     /// Optional instance password.

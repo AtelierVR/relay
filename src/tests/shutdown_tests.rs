@@ -29,7 +29,9 @@ async fn graceful_shutdown_notifies_and_closes_clients() {
             .accept_uni()
             .await
             .expect("client should receive a uni-stream");
-        read_framed(&mut recv).await.expect("framed disconnect packet")
+        read_framed(&mut recv)
+            .await
+            .expect("framed disconnect packet")
     };
 
     let ((), framed) = tokio::join!(
