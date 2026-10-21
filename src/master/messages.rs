@@ -127,7 +127,8 @@ pub struct SyncInstanceData {
     pub password: Option<String>,
     pub capacity: u16,
     pub player_count: usize,
-    pub world: WorldInfo,
+    /// NoxIdentifier of the world: `"<master_id>?v=<version>@<address>"`, or the bundle URL.
+    pub world: String,
     pub flags: String,
 }
 

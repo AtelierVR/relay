@@ -178,7 +178,7 @@ impl MasterClient {
                     password: None, // Password hash is not synced back
                     capacity: inst.capacity,
                     player_count: inst.get_players().len(),
-                    world: WorldInfo::from(&inst.world),
+                    world: inst.world.to_identifier(),
                     flags: format!("{:?}", inst.flags),
                 }
             })
