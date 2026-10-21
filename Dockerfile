@@ -1,5 +1,7 @@
 # Stage 1: Build
-FROM rust:1.88-alpine AS build
+# Pin the same toolchain as CI (`dtolnay/rust-toolchain@stable`): several locked crates
+# already require >= 1.89 (e.g. uuid 1.28), so 1.88 no longer compiles.
+FROM rust:1.99-alpine AS build
 RUN apk add --no-cache musl-dev openssl-dev openssl-libs-static
 WORKDIR /app
 
