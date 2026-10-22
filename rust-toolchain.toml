@@ -1,0 +1,9 @@
+# The Rust toolchain used by the CI (`.github/workflows/ci.yml`), by the
+# Dockerfile and by the local toolchain.
+#
+# It is pinned on purpose: several locked crates require a recent compiler
+# (uuid 1.28 needs >= 1.89), and a floating `stable` in CI silently drifts
+# away from the version the Dockerfile pins.
+[toolchain]
+channel = "1.99.0"
+components = ["clippy", "rustfmt"]

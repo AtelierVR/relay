@@ -1,0 +1,34 @@
+#!/bin/sh
+#
+# Pre-commit gate: the fast Rust checks, before the commit is recorded.
+#
+# The full suite (npm run ci + the Docker build) runs at pre-push time; this
+# hook catches a formatting or lint error early, without waiting for the push.
+#
+# Controls:
+#   NOX_CI_SKIP=1   commit without any check
+#
+# Enabled per clone by `npm install` (the "prepare" script sets core.hooksPath),
+# or manually with:  git config core.hooksPath .githooks
+
+set -e
+
+if [ "$NOX_CI_SKIP" = "1" ]; then
+    echo "pre-commit: checks skipped (NOX_CI_SKIP=1)"
+    exit 0
+fi
+
+cd "$(git rev-parse --show-toplevel)"
+
+if git diff --cached --quiet; then
+    echo "pre-commit: nothing staged"
+    exit 0
+fi
+
+echo "pre-commit: cargo fmt --check"
+cargo fmt --all -- --check
+
+echo "pre-commit: cargo clippy"
+cargo clippy --all-targets --all-features -- -D warnings
+
+echo "pre-commit: ok"
