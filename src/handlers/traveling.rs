@@ -191,7 +191,8 @@ fn do_travel(
             w.write_u8(TravelingResults::UseNode as u8);
             w.write_u32(world.master_id);
             w.write_string(&world.address);
-            w.write_u16(world.version);
+            // 0 = no pinned release: the client resolves the preferred one from its asset API.
+            w.write_u16(world.release_version());
         }
     }
 

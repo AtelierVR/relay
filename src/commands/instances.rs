@@ -74,10 +74,7 @@ fn show_instance(context: &CommandContext, id: u8) {
 
     match &inst.world {
         TravelTarget::Node(world) => {
-            info!(
-                "  World:            node {}?v={}@{}",
-                world.master_id, world.version, world.address
-            );
+            info!("  World:            node {}", world.to_identifier());
         }
         TravelTarget::Bundle(bundle) => {
             info!(

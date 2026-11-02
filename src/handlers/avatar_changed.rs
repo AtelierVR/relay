@@ -133,7 +133,7 @@ fn build_broadcast(iid: u8, player_id: u32, avatar: &Avatar) -> Bytes {
     w.write_u32(player_id);
     w.write_u32(avatar.id);
     w.write_string(&avatar.server);
-    w.write_u16(avatar.version);
+    w.write_u16(avatar.release_version());
     encode_stream_packet(0, PacketType::AvatarChanged, w.finish().as_ref())
 }
 

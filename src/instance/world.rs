@@ -13,6 +13,9 @@ pub struct World {
 }
 
 impl World {
+    /// Version the master node uses for "no pinned release" (`auto`).
+    pub const AUTO_VERSION: u16 = 0;
+
     pub fn new(master_id: u32, address: impl Into<String>, version: u16) -> Self {
         Self {
             master_id,
@@ -21,9 +24,21 @@ impl World {
         }
     }
 
-    /// `"{master_id}?v={version}@{address}"`
+    /// Release pinned by the world, or `0` when none is pinned: the clients then resolve the
+    /// preferred release through their asset API. Only `0` means "auto".
+    pub fn release_version(&self) -> u16 {
+        self.version
+    }
+
+    /// `"{master_id}[?v={version}]@{address}"` — the `v` query is omitted when no release is
+    /// pinned, so clients resolve the preferred release instead of a release named `0`.
     pub fn to_identifier(&self) -> String {
-        format!("{}?v={}@{}", self.master_id, self.version, self.address)
+        let version = self.release_version();
+        if version == 0 {
+            format!("{}@{}", self.master_id, self.address)
+        } else {
+            format!("{}?v={}@{}", self.master_id, version, self.address)
+        }
     }
 }
 

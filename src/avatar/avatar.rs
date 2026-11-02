@@ -17,8 +17,16 @@ impl Default for Avatar {
         Self {
             id: 0,
             server: String::new(),
-            version: u16::MAX,
+            version: 0,
             parameters: HashMap::new(),
         }
+    }
+}
+
+impl Avatar {
+    /// Version sent on the wire: the pinned release, or `0` when none is pinned (the clients
+    /// then resolve the preferred release through their asset API). Only `0` means "auto".
+    pub fn release_version(&self) -> u16 {
+        self.version
     }
 }

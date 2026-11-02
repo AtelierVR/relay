@@ -432,7 +432,7 @@ fn broadcast_join(
             w.write_u32(other_pid);
             w.write_u32(avatar.id);
             w.write_string(&avatar.server);
-            w.write_u16(avatar.version);
+            w.write_u16(avatar.release_version());
             let pkt = encode_stream_packet(0, PacketType::AvatarChanged, w.finish().as_ref());
             if let Some(joining_arc) = state.clients.get(entering_client_id) {
                 joining_arc.read().try_push(pkt);
