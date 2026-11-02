@@ -1,14 +1,25 @@
 #!/bin/sh
 #
-# Pre-push gate: runs locally what the CI runs, so a broken commit is caught
-# before it leaves the machine.
+# Pre-push gate: runs locally exactly what the CI job runs, so a commit that
+# would fail on GitHub is caught before it leaves the machine.
 #
-#   npm run ci         type-check / tests / cargo checks   (always)
-#   npm run ci:docker  the image the CI builds             (default)
+# The steps mirror .github/workflows/ci.yml, in the same order:
+#
+#   node scripts/check-toolchain.mjs                          toolchain alignment
+#   cargo fmt --all -- --check                                formatting
+#   cargo clippy --all-targets --all-features -- -D warnings   lints
+#   cargo build --release                                      the shipped binary
+#   cargo test --release                                       the test suite
+#   docker build -t nox-relay:ci .                             the published image
+#
+# The cargo steps are skipped when nothing Rust/Cargo/Docker related is being
+# pushed (a docs-only push does not need a release build). The docker build is
+# skipped when docker is not on PATH.
 #
 # Controls:
 #   NOX_CI_SKIP=1     push without any check
 #   NOX_CI_DOCKER=0   skip the docker build (the slow part)
+#   NOX_CI_FULL=1     run the cargo steps even if no Rust file changed
 #
 # Enabled per clone by `npm install` (the "prepare" script sets core.hooksPath),
 # or manually with:  git config core.hooksPath .githooks
@@ -35,14 +46,41 @@ if [ -z "$changed" ]; then
     exit 0
 fi
 
-echo "pre-push: npm run ci"
-npm run --silent ci
+rust_changed=1
+if [ "$NOX_CI_FULL" != "1" ]; then
+    printf '%s\n' "$changed" | grep -Eq '^(Cargo\.(toml|lock)|rust-toolchain\.toml|Dockerfile|docker/|scripts/|src/|tests/|benches/|examples/)' || rust_changed=0
+fi
+
+if [ "$rust_changed" != "1" ]; then
+    echo "pre-push: no Rust/Cargo/Docker change, cargo steps skipped (NOX_CI_FULL=1 to force)"
+else
+    if command -v node >/dev/null 2>&1 && [ -f scripts/check-toolchain.mjs ]; then
+        echo "pre-push: toolchain check"
+        node scripts/check-toolchain.mjs
+    else
+        echo "pre-push: toolchain check skipped (node or scripts/check-toolchain.mjs missing)"
+    fi
+
+    echo "pre-push: cargo fmt --all -- --check"
+    cargo fmt --all -- --check
+
+    echo "pre-push: cargo clippy --all-targets --all-features -- -D warnings"
+    cargo clippy --all-targets --all-features -- -D warnings
+
+    echo "pre-push: cargo build --release"
+    cargo build --release
+
+    echo "pre-push: cargo test --release"
+    cargo test --release
+fi
 
 if [ "$NOX_CI_DOCKER" = "0" ]; then
     echo "pre-push: docker build skipped (NOX_CI_DOCKER=0)"
+elif command -v docker >/dev/null 2>&1; then
+    echo "pre-push: docker build"
+    docker build -t nox-relay:ci .
 else
-    echo "pre-push: npm run ci:docker"
-    npm run --silent ci:docker
+    echo "pre-push: docker build skipped (docker not found in PATH)"
 fi
 
 echo "pre-push: ok ($(printf '%s\n' "$changed" | wc -l | tr -d ' ') file(s) to push)"
