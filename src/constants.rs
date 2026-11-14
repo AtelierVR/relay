@@ -1,5 +1,5 @@
 // Protocol and server constants.
-pub const PROTOCOL_VERSION: u16 = 3;
+pub const PROTOCOL_VERSION: u16 = 5;
 pub const ENGINE: &str = "nox";
 pub const VERSION: &str = "0.1.0";
 
