@@ -320,7 +320,7 @@ fn build_enter_response(
     w.write_u32(user_id);
     w.write_string(&user_addr);
     w.write_string(&display);
-    w.write_i64(player.created_at);
+    w.write_i64(player.created_at * 1000); // DateTime on the wire is Unix microseconds
     w.write_u8(tps);
     w.write_f32(threshold);
     w.write_f32(inst.render_entity);
@@ -377,7 +377,7 @@ fn broadcast_join(
         w.write_u32(user_id);
         w.write_string(&user_addr);
         w.write_string(&display);
-        w.write_i64(player.created_at);
+        w.write_i64(player.created_at * 1000); // DateTime on the wire is Unix microseconds
         w.write_string(&c.engine);
         w.write_string(&c.platform);
         encode_stream_packet(0, PacketType::Join, w.finish().as_ref())
@@ -522,7 +522,7 @@ fn build_existing_join(
     w.write_u32(user_id);
     w.write_string(&user_addr);
     w.write_string(&display);
-    w.write_i64(player.created_at);
+    w.write_i64(player.created_at * 1000); // DateTime on the wire is Unix microseconds
     w.write_string(&c.engine);
     w.write_string(&c.platform);
     encode_stream_packet(0, PacketType::Join, w.finish().as_ref())

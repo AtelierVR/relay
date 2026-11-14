@@ -289,7 +289,7 @@ async fn on_resolve_challenge(packet: &mut Packet, mut r: PacketReader) {
             }
             let mut w = PacketWriter::new();
             w.write_u8(AuthResult::Blacklisted as u8);
-            w.write_i64(resolve.expire_at);
+            w.write_i64(resolve.expire_at * 1000); // DateTime on the wire is Unix microseconds
             w.write_string(resolve.reason.as_deref().unwrap_or("Blacklisted"));
             packet.reply_raw(encode_stream_packet(
                 uid,
