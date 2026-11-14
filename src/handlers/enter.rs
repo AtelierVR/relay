@@ -456,6 +456,7 @@ fn broadcast_join(
             w.write_u32(other_pid);
             w.write_u16(rig_id);
             w.write_u8(tr_flags.bits());
+            w.write_u32(0); // replay: no meaningful sender clock
             if tr_flags.contains(TransformFlags::POSITION) {
                 w.write_vec3(tr.position);
             }

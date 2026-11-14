@@ -3,15 +3,18 @@
 /// Datagram wire (after [UID:u16][Type:u8]):
 ///
 /// EntityPart (sub-type 0x01):
-///   [iid: u8][TransformType: u8 = 1][pid: u32][rig: u16][flags: u8]
-///   (?position: vec3)(?rotation: quat)(?scale: vec3)(?velocity: vec3)(?ang_velocity: vec3)
-///   Broadcast: [iid][TransformType::EntityPart][eId][rig][flags][...][bId]
+///   [iid: u8][TransformType: u8 = 1][pid: u32][rig: u16][flags: u8][time: u32][fields...]
+///   Broadcast: [iid][TransformType::EntityPart][eId][rig][flags][time: u32][fields...][bId]
 ///
 /// `pid` may be `SELF` (`u32::MAX`), meaning the sending player itself.
 ///
+/// `time` is the sender clock in milliseconds (0 = not set), forwarded untouched: the receiver
+/// interpolates on that clock, so the replay follows the sender's cadence rather than the arrival
+/// times. A transform replayed from the store is sent with `time = 0`.
+///
 /// ByPath (sub-type 0x00):
-///   [iid: u8][TransformType: u8 = 0][path: string][flags: u8][...]
-///   Broadcast: [iid][TransformType::ByPath][path][flags][...][pId]
+///   [iid: u8][TransformType: u8 = 0][path: string][flags: u8][time: u32][fields...]
+///   Broadcast: [iid][TransformType::ByPath][path][flags][time: u32][fields...][pId]
 use bytes::Bytes;
 use tracing::debug;
 
@@ -151,6 +154,7 @@ fn on_entity_part(
     let flags = TransformFlags::from_bits_truncate(r.read_u8());
     let active_flags = flags & !TransformFlags::RESET;
     let is_reset = flags.contains(TransformFlags::RESET);
+    let time_ms = r.read_u32();
 
     // Metered by `handle` (see `entity_part_key`).
 
@@ -169,6 +173,7 @@ fn on_entity_part(
         }
         .unwrap_or_default()
     };
+    tr.time_ms = time_ms;
 
     if flags.contains(TransformFlags::POSITION) {
         tr.position = r.read_vec3();
@@ -188,6 +193,7 @@ fn on_entity_part(
 
     // Broadcast to all visible others.
     let broadcast = build_entity_part(iid, target_id, self_player_id, rig_id, active_flags, &tr);
+
     let recipients: Vec<u16> = {
         let inst = inst_arc.read();
         inst.get_players()
@@ -243,6 +249,7 @@ fn on_by_path(
     let flags = TransformFlags::from_bits_truncate(r.read_u8());
     let mut tr = Transform::default();
     let active_flags = flags & !TransformFlags::RESET;
+    tr.time_ms = r.read_u32();
 
     if flags.contains(TransformFlags::POSITION) {
         tr.position = r.read_vec3();
@@ -289,6 +296,7 @@ pub(crate) fn build_entity_part(
     w.write_u32(entity_id);
     w.write_u16(rig);
     w.write_u8(flags.bits());
+    w.write_u32(tr.time_ms);
     write_transform_fields(&mut w, flags, tr);
     w.write_u32(broadcaster_id);
     encode_datagram(0, PacketType::Transform, w.finish().as_ref())
@@ -306,6 +314,7 @@ fn build_by_path(
     w.write_u8(TransformType::ByPath as u8);
     w.write_string(path);
     w.write_u8(flags.bits());
+    w.write_u32(tr.time_ms);
     write_transform_fields(&mut w, flags, tr);
     w.write_u32(player_id);
     encode_datagram(0, PacketType::Transform, w.finish().as_ref())

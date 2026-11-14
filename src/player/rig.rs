@@ -32,6 +32,13 @@ pub struct Transform {
     pub scale: Vec3,
     pub velocity: Vec3,
     pub ang_velocity: Vec3,
+    /// Clock of the client that sent the transform, in milliseconds (0 = not set).
+    ///
+    /// The relay only forwards it: a receiver derives its own clock offset from it, so the
+    /// interpolation is paced by the sender (4 TPS and 128 TPS rooms alike) instead of by the
+    /// jittered arrival times. A transform replayed from the store has no meaningful sender time
+    /// and is sent with 0.
+    pub time_ms: u32,
 }
 
 impl Default for Transform {
@@ -42,6 +49,7 @@ impl Default for Transform {
             scale: Vec3::ONE,
             velocity: Vec3::ZERO,
             ang_velocity: Vec3::ZERO,
+            time_ms: 0,
         }
     }
 }
