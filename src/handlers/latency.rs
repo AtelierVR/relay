@@ -1,9 +1,13 @@
 /// ```packet
 /// [Length: u16][UID: u16][Type: u8 = 0x04]
-/// [ClientTimestamp: i64]   ← Unix ms sent by the client
+/// [ClientTimestamp: i64]   ← opaque, echoed back untouched (Unity sends UTC ticks, the bot ms)
 /// [ClientLong: i64]        ← opaque long sent by the client
 /// ```
 /// Response: `[ClientTimestamp: i64][ServerTimestamp: i64][ClientLong: i64]`
+///
+/// The probe may arrive on a bidi stream or as a datagram, and the answer goes back on the same
+/// kind of channel: opening a stream and starting it is deferred by the QUIC stacks (several ms on
+/// loopback), which would be larger than the round-trip being measured.
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -22,9 +26,16 @@ pub fn handle(mut packet: Packet) {
     let client_id = packet.client_id();
     let uid = packet.uid;
     let payload = packet.payload.clone();
+    let is_stream = packet.is_stream();
     let resp = handle_inner(&state, client_id, uid, payload);
-    if !resp.is_empty() {
+    if resp.is_empty() {
+        return;
+    }
+
+    if is_stream {
         packet.reply_raw(resp);
+    } else {
+        packet.client.read().send_datagram(resp);
     }
 }
 
@@ -39,17 +50,17 @@ pub fn handle_inner(state: &Arc<AppState>, client_id: u16, uid: u16, payload: By
     }
 
     let mut r = PacketReader::new(payload);
-    let client_ts = r.read_i64(); // client's DateTime (Unix ms)
+    let client_ts = r.read_i64(); // client clock, echoed untouched
     let client_long = r.read_i64(); // opaque client long
 
-    let now_ms = std::time::SystemTime::now()
+    let now_us = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_millis() as i64;
+        .as_micros() as i64;
 
     let mut w = PacketWriter::new();
     w.write_i64(client_ts); // echo client timestamp back
-    w.write_i64(now_ms); // server timestamp
+    w.write_i64(now_us); // server timestamp (Unix microseconds, like every DateTime on the wire)
     w.write_i64(client_long); // echo client long back
     encode_stream_packet(uid, PacketType::Latency, w.finish().as_ref())
 }
