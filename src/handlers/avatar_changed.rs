@@ -1,9 +1,9 @@
 /// AvatarChanged packet handler.
 ///
-/// Request:  [iid: u8][pid: u16][avatar_id: u32][server: string][version: u16]
+/// Request:  [iid: u8][pid: u32][avatar_id: u32][server: string][release: u32]
 /// Response: [iid: u8][AvatarChangedResult: u8]  (+ optional reason on failure)
-/// Broadcast to others: [iid: u8][AvatarChangedResult::Changing][player_id: u16]
-///                      [avatar_id: u32][server: string][version: u16]
+/// Broadcast to others: [iid: u8][AvatarChangedResult::Changing][player_id: u32]
+///                      [avatar_id: u32][server: string][release: u32]
 use bytes::Bytes;
 use tracing::{debug, warn};
 
@@ -81,13 +81,13 @@ pub async fn handle(mut packet: Packet) {
     let avatar = Avatar {
         id: r.read_u32(),
         server: r.read_string().unwrap_or_default(),
-        version: r.read_u16(),
+        release: r.read_u32(),
         parameters: std::collections::HashMap::new(),
     };
 
     debug!(
-        "[AvatarChanged] player {} (by client {}) in instance {}: avatar={}@{} (version {})",
-        op_player_id, client_id, iid, avatar.id, avatar.server, avatar.version
+        "[AvatarChanged] player {} (by client {}) in instance {}: avatar={}@{} (release {})",
+        op_player_id, client_id, iid, avatar.id, avatar.server, avatar.release
     );
 
     // Apply avatar.
@@ -133,7 +133,7 @@ fn build_broadcast(iid: u8, player_id: u32, avatar: &Avatar) -> Bytes {
     w.write_u32(player_id);
     w.write_u32(avatar.id);
     w.write_string(&avatar.server);
-    w.write_u16(avatar.release_version());
+    w.write_u32(avatar.release_version());
     encode_stream_packet(0, PacketType::AvatarChanged, w.finish().as_ref())
 }
 

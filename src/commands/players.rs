@@ -84,7 +84,7 @@ fn show_player(context: &CommandContext, id: u32) {
                 "  Avatar:           {}@{} v{} ({} parameter(s))",
                 avatar.id,
                 avatar.server,
-                avatar.version,
+                avatar.release,
                 avatar.parameters.len()
             ),
             None => info!("  Avatar:           none"),
