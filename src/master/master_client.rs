@@ -33,6 +33,18 @@ use super::{
 
 type PendingMap = Arc<DashMap<String, oneshot::Sender<Value>>>;
 
+/// Maximum number of outbound messages waiting for the socket. Past it the oldest are dropped: a
+/// master that stops reading must not grow the queue without bound (the specs and the forwarded
+/// logs keep flowing in).
+const MAX_SEND_QUEUE: usize = 2048;
+
+/// How long the master connection may stay silent before the session is considered dead.
+///
+/// The master answers the relay ping every 15 s: three missed answers means the socket is
+/// half-open (a proxy or NAT dropped it without a FIN), which used to leave the relay stuck on it
+/// for ever — neither reconnecting nor answering anything again.
+const INBOUND_TIMEOUT: Duration = Duration::from_secs(45);
+
 /// Async WebSocket client for the MasterServer connection.
 ///
 /// Reconnects automatically with exponential back-off on disconnect.
@@ -91,7 +103,25 @@ impl MasterClient {
 
     /// Queue a JSON message for sending on the current WS connection.
     pub fn emit_raw(&self, json: String) {
-        self.send_queue.lock().push(json);
+        let dropped = {
+            let mut queue = self.send_queue.lock();
+            let mut dropped = 0;
+
+            if queue.len() >= MAX_SEND_QUEUE {
+                dropped = queue.len() - MAX_SEND_QUEUE + 1;
+                queue.drain(0..dropped);
+            }
+
+            queue.push(json);
+            dropped
+        };
+
+        if dropped > 0 {
+            warn!(
+                "[MasterClient] outbound queue full ({MAX_SEND_QUEUE}), dropped {dropped} message(s)"
+            );
+        }
+
         self.send_notify.notify_one();
     }
 
@@ -417,6 +447,8 @@ impl MasterClient {
 
             info!("[MasterClient] Connecting to {ws_url}");
 
+            let started = std::time::Instant::now();
+
             match self.run_session(&ws_url).await {
                 Ok(()) => {
                     warn!("[MasterClient] Session ended cleanly; reconnecting…");
@@ -424,6 +456,12 @@ impl MasterClient {
                 Err(e) => {
                     warn!("[MasterClient] Session error: {e}; reconnecting in {backoff:?}");
                 }
+            }
+
+            // A session that lived long enough is not a failing loop: reconnect right away instead
+            // of keeping the back-off accumulated by a previous failure.
+            if started.elapsed() > Duration::from_secs(30) {
+                backoff = Duration::from_secs(1);
             }
 
             tokio::time::sleep(backoff).await;

@@ -175,14 +175,17 @@ pub fn check(state: &AppState, client_id: u16, key: u64) -> bool {
         return true;
     };
 
-    let mut client = arc.write();
-
-    // Resolve the budget from the room while the client is already locked (one lock, not three).
-    let rate = client
-        .room
+    // Resolve the room budget *before* locking the client. The TPS lives behind the instance
+    // lock, and holding the client write guard while acquiring it deadlocks the whole relay as
+    // soon as another handler holds the instance and waits for a client: the pending instance
+    // writer then blocks every new instance reader, so the two sides wait for each other for ever.
+    let room = arc.read().room;
+    let rate = room
         .and_then(|iid| state.instances.get(iid))
         .map(|inst| inst.read().get_effective_tps(&state.config.load_balancing))
         .unwrap_or(DEFAULT_TPS);
+
+    let mut client = arc.write();
 
     if client.limits.allow(key, f32::from(rate.max(1)), config) {
         return true;

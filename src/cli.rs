@@ -9,6 +9,7 @@
 //!   are still read and executed, without a prompt, so `echo status | noxrelay` works.
 
 use std::io::{self, IsTerminal, Write};
+use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use rustyline::ExternalPrinter;
@@ -31,9 +32,46 @@ fn printer() -> &'static Mutex<Option<Box<dyn ExternalPrinter + Send>>> {
     PRINTER.get_or_init(|| Mutex::new(None))
 }
 
-/// Writes one complete log line: through the interactive editor when one is running, directly
-/// to stdout otherwise.
+/// Maximum number of log lines waiting for the writer thread. Past it the lines are dropped: a
+/// consumer that stopped draining our stdout must never be able to stall the relay.
+const LOG_QUEUE: usize = 4096;
+
+/// Queue feeding the dedicated writer thread, created on first use.
+static LOG_TX: OnceLock<Option<SyncSender<String>>> = OnceLock::new();
+
+fn log_sender() -> Option<&'static SyncSender<String>> {
+    LOG_TX
+        .get_or_init(|| {
+            let (tx, rx) = std::sync::mpsc::sync_channel::<String>(LOG_QUEUE);
+            // Deliberately not a Tokio task: writing to a stdout nobody reads blocks, and a worker
+            // blocked in a log call stops the whole runtime (QUIC and master WebSocket included).
+            std::thread::Builder::new()
+                .name("relay-log".to_string())
+                .spawn(move || {
+                    for line in rx {
+                        write_line(&line);
+                    }
+                })
+                .ok()
+                .map(|_| tx)
+        })
+        .as_ref()
+}
+
+/// Queues a complete log line for the writer thread, never blocking the caller.
 fn print_line(line: &str) {
+    match log_sender() {
+        // A full queue means stdout is not being drained: drop instead of blocking.
+        Some(tx) => {
+            let _ = tx.try_send(line.to_string());
+        }
+        None => write_line(line),
+    }
+}
+
+/// Writes one complete log line: through the interactive editor when one is running, directly
+/// to stdout otherwise. Runs on the writer thread.
+fn write_line(line: &str) {
     let mut guard = match printer().lock() {
         Ok(guard) => guard,
         Err(_) => return,
