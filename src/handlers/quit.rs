@@ -177,6 +177,10 @@ pub async fn handle(mut packet: Packet) {
         inst.remove_player(self_player_id);
     }
 
+    // The entities it owned fall back to the instance master.
+    super::entities::reassign_ownership(state, iid);
+    broadcast_master(state, iid, &inst_arc);
+
     // Notify node of player leaving.
     let _ = state.master.emit(
         "player_leave",
@@ -189,6 +193,19 @@ pub async fn handle(mut packet: Packet) {
     );
 
     packet.reply_raw(make_quit_response(uid, iid, quit_type, reason.as_deref()));
+}
+
+/// Push the flags of the player holding the authority to the room.
+///
+/// A player that leaves can be the master, in which case the instance hands the authority over
+/// (`Instance::remove_player`): no other message carries the player flags, so the clients only learn the
+/// new master from this update.
+fn broadcast_master(state: &AppState, iid: u8, inst_arc: &crate::instance::ArcInstance) {
+    let master = inst_arc.read().get_master().map(|p| p.id);
+
+    if let Some(player_id) = master {
+        super::player_update::broadcast_flags(state, iid, inst_arc, player_id);
+    }
 }
 
 fn build_leave(
@@ -247,6 +264,10 @@ pub fn leave_all_instances(state: &AppState, client_id: u16) {
         }
 
         inst_arc.write().remove_player(player_id);
+
+        // The entities it owned fall back to the instance master.
+        super::entities::reassign_ownership(state, iid);
+        broadcast_master(state, iid, &inst_arc);
 
         // Notify node of player leaving (leave_all path, e.g. on disconnect).
         let _ = state.master.emit(

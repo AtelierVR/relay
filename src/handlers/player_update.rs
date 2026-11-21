@@ -10,7 +10,7 @@ use bytes::Bytes;
 use tracing::debug;
 
 use crate::{
-    handlers::packet::Packet,
+    handlers::{context::AppState, packet::Packet},
     proto::{
         buffer::{PacketReader, PacketWriter},
         header::encode_stream_packet,
@@ -155,6 +155,50 @@ pub async fn handle(mut packet: Packet) {
         disp.as_deref(),
         pflags,
     ));
+}
+
+/// Broadcast the flags of a player to every client of the instance.
+///
+/// Used when the authority is handed over: the clients learn the new master from the flags they receive
+/// (no other message carries them).
+pub fn broadcast_flags(
+    state: &AppState,
+    iid: u8,
+    inst_arc: &crate::instance::ArcInstance,
+    player_id: u32,
+) {
+    let (display, player_flags, clients) = {
+        let inst = inst_arc.read();
+
+        let Some(p) = inst.get_player(player_id) else {
+            return;
+        };
+
+        (
+            p.display.clone(),
+            p.flags.bits(),
+            inst.get_players()
+                .iter()
+                .map(|p| p.client_id)
+                .collect::<Vec<u16>>(),
+        )
+    };
+
+    let bytes = build_update_packet(
+        0,
+        iid,
+        PlayerUpdateResult::Change,
+        player_id,
+        PlayerUpdateFlags::FLAGS,
+        display.as_deref(),
+        player_flags,
+    );
+
+    for cid in clients {
+        if let Some(arc) = state.clients.get(cid) {
+            arc.read().try_push(bytes.clone());
+        }
+    }
 }
 
 fn build_update_packet(

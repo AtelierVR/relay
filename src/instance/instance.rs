@@ -2,12 +2,13 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crate::constants::{
     DEFAULT_PROPERTY_RESEND_INTERVAL, DEFAULT_RENDER_ENTITY, DEFAULT_THRESHOLD, DEFAULT_TPS,
 };
 use crate::handlers::context::AppState;
-use crate::player::Player;
+use crate::player::{Player, PlayerFlags};
 use crate::utils::hashing::verify_password;
 
 use super::{
@@ -17,6 +18,19 @@ use super::{
     view_group::ViewGroup,
     world::TravelTarget,
 };
+
+/// An ownership request waiting for the answer of a privileged player.
+#[derive(Debug)]
+pub struct PendingOwnership {
+    /// Entity whose ownership is asked.
+    pub entity: u32,
+    /// Player that asked for it.
+    pub requester: u32,
+    /// Player that would get the ownership (the requester, unless someone gives it away).
+    pub receiver: u32,
+    /// When the request is dropped if nobody answered.
+    pub expires_at: Instant,
+}
 
 /// A relay-hosted instance (a "room" players can enter).
 #[derive(Debug)]
@@ -50,6 +64,12 @@ pub struct Instance {
     moderated: Vec<UserModerated>,
     /// Networked entity registry (props, mirrors, ...).
     pub entities: InstanceEntities,
+    /// Ownership requests waiting for the answer of a privileged player, by request id.
+    pub pending_ownership: HashMap<u16, PendingOwnership>,
+    /// Next id handed to an ownership request.
+    pub next_ownership_request: u16,
+    /// Whether the tick expiring the ownership requests is running for this instance.
+    pub ownership_ticking: bool,
     /// Hearing control map: (listener_id, speaker_id, channel_id) → can_hear.
     /// When empty, all players can hear all others. When a key exists, its value is authoritative.
     pub hearing_map: HashMap<(u32, u32, u32), bool>,
@@ -143,6 +163,9 @@ impl Instance {
             view_groups: Vec::new(),
             moderated: Vec::new(),
             entities: InstanceEntities::new(),
+            pending_ownership: HashMap::new(),
+            next_ownership_request: 1,
+            ownership_ticking: false,
             hearing_map: HashMap::new(),
             next_view_group_id: u32::from(u16::MAX) + 1,
             last_tick_duration: 0.0,
@@ -223,8 +246,19 @@ impl Instance {
 
     pub fn remove_player(&mut self, player_id: u32) -> Option<Player> {
         if let Some(pos) = self.players.iter().position(|p| p.id == player_id) {
+            let was_master = self.players[pos].is_master();
             let player = self.players.remove(pos);
             self.cleanup_user(player_id);
+
+            // The master left: the oldest remaining ready player takes the authority. Without this the
+            // room has no master until somebody else enters, so a client reconnecting alone never gets
+            // it back.
+            if was_master {
+                if let Some(next) = self.players.iter_mut().find(|p| p.is_ready()) {
+                    next.flags |= PlayerFlags::INSTANCE_MASTER;
+                }
+            }
+
             Some(player)
         } else {
             None
@@ -280,16 +314,81 @@ impl Instance {
         self.capacity != 0 && self.players.len() >= self.capacity as usize
     }
 
+    /// Whether an entity id is already used by a player or by a networked entity.
+    #[inline]
+    pub fn entity_id_used(&self, id: u32) -> bool {
+        self.players.iter().any(|p| p.id == id) || self.entities.contains(id)
+    }
+
     /// Find the lowest entity id not currently in use (starting from 0).
     ///
-    /// Players and networked entities share the same id space: a player is an entity.
+    /// Players and networked entities share the same id space: a player is an entity, and the ids
+    /// are always allocated by the relay (never derived from the world), so one space is enough.
     pub fn next_entity_id(&self) -> u32 {
         for id in 0..u32::MAX {
-            if !self.players.iter().any(|p| p.id == id) && !self.entities.contains(id) {
+            if !self.entity_id_used(id) {
                 return id;
             }
         }
         u32::MAX
+    }
+
+    // ── Ownership requests ────────────────────────────────────────────────
+
+    /// Register an ownership request and return its id, or `None` when no id is free.
+    ///
+    /// `timeout` is how long a privileged player has to answer it: it follows the client timeout of
+    /// the relay, a client has no reason to wait longer than that for a room.
+    pub fn push_ownership_request(
+        &mut self,
+        entity: u32,
+        requester: u32,
+        receiver: u32,
+        timeout: Duration,
+    ) -> Option<u16> {
+        for _ in 0..u16::MAX {
+            let rid = self.next_ownership_request;
+            self.next_ownership_request = rid.wrapping_add(1);
+
+            if rid == 0 || self.pending_ownership.contains_key(&rid) {
+                continue;
+            }
+
+            self.pending_ownership.insert(
+                rid,
+                PendingOwnership {
+                    entity,
+                    requester,
+                    receiver,
+                    expires_at: Instant::now() + timeout,
+                },
+            );
+
+            return Some(rid);
+        }
+
+        None
+    }
+
+    /// Drop and return every ownership request that nobody answered in time.
+    pub fn expired_ownership_requests(&mut self) -> Vec<(u16, PendingOwnership)> {
+        let now = Instant::now();
+
+        let expired: Vec<u16> = self
+            .pending_ownership
+            .iter()
+            .filter(|(_, pending)| pending.expires_at <= now)
+            .map(|(rid, _)| *rid)
+            .collect();
+
+        expired
+            .into_iter()
+            .filter_map(|rid| {
+                self.pending_ownership
+                    .remove(&rid)
+                    .map(|pending| (rid, pending))
+            })
+            .collect()
     }
 
     // ── ViewGroup ──────────────────────────────────────────────────────────
