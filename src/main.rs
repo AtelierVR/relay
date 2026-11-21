@@ -13,6 +13,7 @@ mod player;
 mod proto;
 mod rate;
 mod shutdown;
+mod tick;
 mod transfer;
 mod transport;
 mod utils;
@@ -188,17 +189,13 @@ async fn main() -> Result<()> {
         });
     }
 
-    // ── Transfer enforcement ───────────────────────────────────────────────
-    // A `Transfer` is only a request: clients that do not apply it are removed once the grace
-    // period expires (`transfer_timeout`, 0 = never enforce).
+    // ── Global maintenance tick ────────────────────────────────────────────
+    // Transfer enforcement, and any other periodic work of the relay.
     {
         let state_ref = Arc::clone(&state);
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
-            loop {
-                interval.tick().await;
-                crate::transfer::enforce(&state_ref);
-            }
+            info!("[Tick] Starting the global maintenance tick...");
+            crate::tick::run(state_ref).await;
         });
     }
 

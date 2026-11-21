@@ -15,8 +15,8 @@ use std::time::SystemTime;
 
 use crate::player::rig::PartTransforms;
 
-/// Kind of a player entity.
-pub const KIND_PLAYER: &str = "player";
+/// Kind of a player entity: a player has no type on the entity channel.
+pub const KIND_PLAYER: u32 = 0;
 
 /// State of a single entity known by the relay.
 ///
@@ -26,11 +26,14 @@ pub const KIND_PLAYER: &str = "player";
 pub struct Entity {
     /// Unique entity id within the instance.
     pub id: u32,
-    /// Entity kind ([`KIND_PLAYER`] for a player, `"prop"`, `"mirror"`, ...).
-    pub kind: String,
+    /// Entity kind, i.e. its type: the CRC32 of the entity type name.
+    ///
+    /// A player has no type ([`KIND_PLAYER`]). An entity placed in the world carries the CRC32 of its
+    /// world object rather than a type name, so the clients all recognise the same object.
+    pub kind: u32,
     /// Entity behaviour flags (unused by a player).
     pub flags: u8,
-    /// Id of the player that owns the entity (`0` = pre-placed by the world; a player owns itself).
+    /// Id of the player that owns the entity (a player owns itself).
     pub owner_id: u32,
     /// Optional human-readable name: a player's display name, a prop's label, ...
     pub display: Option<String>,
@@ -46,7 +49,7 @@ impl Entity {
     pub fn new() -> Self {
         Self {
             id: 0,
-            kind: String::new(),
+            kind: KIND_PLAYER,
             flags: 0,
             owner_id: 0,
             display: None,
@@ -116,19 +119,6 @@ impl InstanceEntities {
         self.entities.insert(id, data);
     }
 
-    /// Replace the structure (kind / flags / owner) of an existing entity, keeping its transform.
-    /// Returns whether the entity existed.
-    pub fn update(&mut self, id: u32, kind: String, flags: u8, owner_id: u32) -> bool {
-        if let Some(entity) = self.entities.get_mut(&id) {
-            entity.kind = kind;
-            entity.flags = flags;
-            entity.owner_id = owner_id;
-            true
-        } else {
-            false
-        }
-    }
-
     pub fn remove(&mut self, id: u32) -> Option<Entity> {
         self.entities.remove(&id)
     }
@@ -137,7 +127,14 @@ impl InstanceEntities {
         self.entities.get(&id).map(|e| e.owner_id)
     }
 
-    pub fn kind_of(&self, id: u32) -> Option<&str> {
-        self.entities.get(&id).map(|e| e.kind.as_str())
+    /// Id of the entity carrying the given kind (its type on the network), if any.
+    ///
+    /// A world entity is identified by its type, so a `Create` asking for a type the room already holds
+    /// is the same entity seen by another client.
+    pub fn find_by_kind(&self, kind: u32) -> Option<u32> {
+        self.entities
+            .iter()
+            .find(|(_, e)| e.kind == kind)
+            .map(|(id, _)| *id)
     }
 }

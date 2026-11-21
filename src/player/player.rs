@@ -33,7 +33,7 @@ impl Player {
     pub fn new(id: u32, client_id: u16, instance_id: u8) -> Self {
         let entity = Entity {
             id,
-            kind: KIND_PLAYER.to_string(),
+            kind: KIND_PLAYER,
             // A player owns itself.
             owner_id: id,
             ..Entity::new()
